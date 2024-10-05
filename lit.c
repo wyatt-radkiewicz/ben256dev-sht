@@ -52,7 +52,7 @@ void hash_objects()
       printf("/%s\n", files[i]->d_name);
       free(files[i]);
    }
-   freopen("status.lit", "w", stdout);
+   freopen(".lit/status.lit", "w", stdout);
    for (; i < file_count && files[i]->d_type == DT_REG; i++)
    {
       size_t command_n = strlen(files[i]->d_name) + 7;
