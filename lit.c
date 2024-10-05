@@ -39,6 +39,39 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
+void hash_objects()
+{
+   check_lit();
+
+   struct dirent** files;
+   int file_count = scandir(".", &files, &status_filter, &status_compar);
+
+   int i = 0;
+   for (; i < file_count && files[i]->d_type == DT_DIR; i++)
+   {
+      printf("/%s\n", files[i]->d_name);
+      free(files[i]);
+   }
+   freopen("status.lit", "w", stdout);
+   for (; i < file_count && files[i]->d_type == DT_REG; i++)
+   {
+      size_t command_n = strlen(files[i]->d_name) + 7;
+      char* command_s = malloc(command_n);
+      if (command_s == NULL)
+         exit(EXIT_FAILURE);
+
+      snprintf(command_s, command_n, "b3sum %s", files[i]->d_name);
+      int rv = system(command_s);
+
+      free(files[i]);
+   }
+   freopen("/dev/tty", "w", stdout);
+   for (; i < file_count; i++)
+   {
+      free(files[i]);
+   }
+   free(files);
+}
 int main(int argc, char* argv[])
 { 
    if (argc < 2)
@@ -52,35 +85,6 @@ int main(int argc, char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      check_lit();
-
-      struct dirent** files;
-      int file_count = scandir(".", &files, &status_filter, &status_compar);
-
-      int i = 0;
-      for (; i < file_count && files[i]->d_type == DT_DIR; i++)
-      {
-         printf("/%s\n", files[i]->d_name);
-         free(files[i]);
-      }
-      freopen("status.lit", "a+", stdout);
-      for (; i < file_count && files[i]->d_type == DT_REG; i++)
-      {
-         size_t command_n = strlen(files[i]->d_name) + 7;
-         char* command_s = malloc(command_n);
-         if (command_s == NULL)
-            return -1;
-
-         snprintf(command_s, command_n, "b3sum %s", files[i]->d_name);
-         int rv = system(command_s);
-
-         free(files[i]);
-      }
-      freopen("/dev/tty", "w", stdout);
-      for (; i < file_count; i++)
-      {
-         free(files[i]);
-      }
-      free(files);
+      hash_objects();
    }
 }
