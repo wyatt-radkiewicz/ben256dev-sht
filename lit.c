@@ -46,9 +46,9 @@ int main(int argc, char* argv[])
 
    if (strcmp(argv[1], "init") == 0)
    {
-      mkdir(".lit/", 0777);
-      mkdir(".lit/objects/", 0777);
-      mkdir(".lit/refs/", 0777);
+      mkdir(".lit/", 777);
+      mkdir(".lit/objects/", 777);
+      mkdir(".lit/refs/", 777);
    }
    else if (strcmp(argv[1], "status") == 0)
    {
@@ -57,22 +57,28 @@ int main(int argc, char* argv[])
       struct dirent** files;
       int file_count = scandir(".", &files, &status_filter, &status_compar);
 
-      for (int i = 0; i < file_count; i++)
+      int i = 0;
+      for (; i < file_count && files[i]->d_type == DT_DIR; i++)
       {
-         if (files[i]->d_type == DT_REG)
-         {
-            size_t command_n = strlen(files[i]->d_name) + 7;
-            char* command_s = malloc(command_n);
-            if (command_s == NULL)
-               return -1;
+         printf("/%s\n", files[i]->d_name);
+         free(files[i]);
+      }
+      freopen("status.lit", "a+", stdout);
+      for (; i < file_count && files[i]->d_type == DT_REG; i++)
+      {
+         size_t command_n = strlen(files[i]->d_name) + 7;
+         char* command_s = malloc(command_n);
+         if (command_s == NULL)
+            return -1;
 
-            snprintf(command_s, command_n, "b3sum %s", files[i]->d_name);
+         snprintf(command_s, command_n, "b3sum %s", files[i]->d_name);
+         int rv = system(command_s);
 
-            int rv = system(command_s);
-         }
-         else
-            printf("/%s\n", files[i]->d_name);
-
+         free(files[i]);
+      }
+      freopen("/dev/tty", "w", stdout);
+      for (; i < file_count; i++)
+      {
          free(files[i]);
       }
       free(files);
