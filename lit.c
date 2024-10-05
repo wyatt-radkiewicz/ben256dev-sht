@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
       if (fp == NULL)
          return -1;
 
-      fp = fopen(".lit/status.lit", "rw");
+      fp = fopen(".lit/status.lit", "r");
 
       char* pardir = malloc(512);
       char* hash   = malloc(65);
