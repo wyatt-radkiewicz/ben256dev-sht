@@ -105,13 +105,23 @@ int main(int argc, char* argv[])
       char* pardir = malloc(512);
       char* hash   = malloc(65);
       char* ref    = malloc(128);
-      fscanf(fp, "%64s %128s", hash, ref);
-      snprintf(pardir, 512, ".lit/%s:%s", hash, ref);
       
-      if (access(pardir, F_OK))
+      int i = 0;
+      for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
-         perror(pardir);
+         snprintf(pardir, 512, ".lit/%.2s/", hash);
+         if (access(pardir, F_OK))
+            continue;
+
+         snprintf(pardir, 512, ".lit/%.2s/%.62s/", hash, hash+2);
+         if (access(pardir, F_OK))
+            continue;
+
+         i++;
       }
+      printf("status.lit lc: %d\n", i);
+      if (ferror(fp))
+         perror("Error while reading status.lit");
 
       fclose(fp);
    }
