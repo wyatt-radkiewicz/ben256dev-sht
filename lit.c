@@ -49,14 +49,17 @@ FILE* hash_objects()
 
    int i = 0;
    if (files[i]->d_type == DT_DIR)
+   {
       printf("Untracked Directories:\n");
+      printf("  (NOTE: lit doesn't support nesting of files)\n");
+   }
    for (; i < file_count && files[i]->d_type == DT_DIR; i++)
    {
-      printf("  /%s\n", files[i]->d_name);
+      printf("    /%s\n", files[i]->d_name);
       free(files[i]);
    }
    if (i > 0)
-      printf("\n(NOTE: lit doesn't support nesting of files)\n");
+      printf("\n");
 
    FILE* fp = freopen(".lit/status.lit", "w", stdout);
    if (fp == NULL)
@@ -102,27 +105,45 @@ int main(int argc, char* argv[])
 
       fp = fopen(".lit/status.lit", "r");
 
-      char* pardir = malloc(512);
-      char* hash   = malloc(65);
-      char* ref    = malloc(128);
+      char*  pardir  = malloc(512);
+      char*  hash    = malloc(65);
+      char*  ref     = malloc(128);
+
+      size_t track_s = 512;
+      char*  track   = malloc(track_s);
       
-      int i = 0;
       for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
-         snprintf(pardir, 512, ".lit/%.2s/", hash);
+         snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
          if (access(pardir, F_OK))
             continue;
 
-         snprintf(pardir, 512, ".lit/%.2s/%.62s/", hash, hash+2);
+         snprintf(pardir, 512, ".lit/objects/%.2s/%.62s/", hash, hash+2);
          if (access(pardir, F_OK))
             continue;
 
-         i++;
+         int wouldve = snprintf(track, track_s, "  %s\n", ref);
+         if (wouldve > track_s)
+         {
+            track_s = wouldve * 2;
+            char* t = realloc(track, track_s);
+            if (t == NULL)
+               return -1;
+
+            track = t;
+         }
       }
-      printf("status.lit lc: %d\n", i);
       if (ferror(fp))
          perror("Error while reading status.lit");
 
+      printf("Tracked Files:\n");
+      printf("%s", track);
+
       fclose(fp);
+
+      free(pardir);
+      free(hash);
+      free(ref);
+      free(track);
    }
 }
