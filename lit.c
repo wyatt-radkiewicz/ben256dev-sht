@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 void print_usage()
 {
@@ -39,7 +40,7 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-void hash_objects()
+FILE* hash_objects()
 {
    check_lit();
 
@@ -47,12 +48,20 @@ void hash_objects()
    int file_count = scandir(".", &files, &status_filter, &status_compar);
 
    int i = 0;
+   if (files[i]->d_type == DT_DIR)
+      printf("Untracked Directories:\n");
    for (; i < file_count && files[i]->d_type == DT_DIR; i++)
    {
-      printf("/%s\n", files[i]->d_name);
+      printf("  /%s\n", files[i]->d_name);
       free(files[i]);
    }
-   freopen(".lit/status.lit", "w", stdout);
+   if (i > 0)
+      printf("\n(NOTE: lit doesn't support nesting of files)\n");
+
+   FILE* fp = freopen(".lit/status.lit", "w", stdout);
+   if (fp == NULL)
+      return NULL;
+
    for (; i < file_count && files[i]->d_type == DT_REG; i++)
    {
       size_t command_n = strlen(files[i]->d_name) + 7;
@@ -71,6 +80,8 @@ void hash_objects()
       free(files[i]);
    }
    free(files);
+
+   return fp;
 }
 int main(int argc, char* argv[])
 { 
@@ -85,6 +96,23 @@ int main(int argc, char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      hash_objects();
+      FILE* fp = hash_objects();
+      if (fp == NULL)
+         return -1;
+
+      fp = fopen(".lit/status.lit", "rw");
+
+      char* pardir = malloc(512);
+      char* hash   = malloc(65);
+      char* ref    = malloc(128);
+      fscanf(fp, "%64s %128s", hash, ref);
+      snprintf(pardir, 512, ".lit/%s:%s", hash, ref);
+      
+      if (access(pardir, F_OK))
+      {
+         perror(pardir);
+      }
+
+      fclose(fp);
    }
 }
