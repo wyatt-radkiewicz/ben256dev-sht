@@ -40,53 +40,66 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-FILE* hash_objects()
+FILE* hash_objects(int* dir_count, int* reg_count)
 {
    check_lit();
 
    struct dirent** files;
    int file_count = scandir(".", &files, &status_filter, &status_compar);
 
-   int i = 0;
-   if (files[i]->d_type == DT_DIR)
+   int ent = 0;
+   if (dir_count)
+      *dir_count = 0;
+   if (files[ent]->d_type == DT_DIR)
    {
       printf("Untracked Directories:\n");
       printf("  (NOTE: lit doesn't support nesting of files)\n");
    }
-   for (; i < file_count && files[i]->d_type == DT_DIR; i++)
+   for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      printf("    /%s\n", files[i]->d_name);
-      free(files[i]);
+      printf("    /%s\n", files[ent]->d_name);
+      free(files[ent]);
+
+      if (dir_count)
+         (*dir_count)++;
    }
-   if (i > 0)
-      printf("\n");
 
    FILE* fp = freopen(".lit/status.lit", "w", stdout);
    if (fp == NULL)
       return NULL;
 
-   for (; i < file_count && files[i]->d_type == DT_REG; i++)
+   if (reg_count)
+      *reg_count = 0;
+   for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
-      size_t command_n = strlen(files[i]->d_name) + 7;
+      size_t command_n = strlen(files[ent]->d_name) + 7;
       char* command_s = malloc(command_n);
       if (command_s == NULL)
          exit(EXIT_FAILURE);
 
-      snprintf(command_s, command_n, "b3sum %s", files[i]->d_name);
+      snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
       int rv = system(command_s);
+      if (rv == -1)
+         perror("b3sum sys call failed");
 
-      free(files[i]);
+      free(files[ent]);
+
+      if (reg_count)
+         (*reg_count)++;
    }
-   freopen("/dev/tty", "w", stdout);
-   for (; i < file_count; i++)
+   const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+   if (stdfp == NULL)
+      return NULL;
+
+   for (; ent < file_count; ent++)
    {
-      free(files[i]);
+      free(files[ent]);
    }
    free(files);
 
    return fp;
 }
-int main(int argc, char* argv[])
+int main(int argc, const char* argv[])
 { 
    if (argc < 2)
       print_usage();
@@ -99,7 +112,9 @@ int main(int argc, char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      FILE* fp = hash_objects();
+      int dir_count;
+      int reg_count;
+      FILE* fp = hash_objects(&dir_count, &reg_count);
       if (fp == NULL)
          return -1;
 
@@ -112,6 +127,7 @@ int main(int argc, char* argv[])
       size_t track_s = 512;
       char*  track   = malloc(track_s);
       
+      int tracked_count = 0;
       for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
          snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
@@ -122,6 +138,7 @@ int main(int argc, char* argv[])
          if (access(pardir, F_OK))
             continue;
 
+         tracked_count++;
          int wouldve = snprintf(track, track_s, "  %s\n", ref);
          if (wouldve > track_s)
          {
@@ -136,8 +153,15 @@ int main(int argc, char* argv[])
       if (ferror(fp))
          perror("Error while reading status.lit");
 
-      printf("Tracked Files:\n");
-      printf("%s", track);
+      printf("%d:%d\n", dir_count, reg_count);
+      if (reg_count)
+      {
+         if (dir_count)
+            printf("\n");
+
+         printf("Tracked Files:\n");
+         printf("%s", track);
+      }
 
       fclose(fp);
 
