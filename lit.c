@@ -40,24 +40,33 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-FILE* hash_objects(int* dir_count, int* reg_count)
+FILE* determine_objects(int* dir_count, int* reg_count, char* restrict untracked_buff, size_t* buff_size)
 {
+   int dc = 0;
+   int rc = 0;
+   buff_size = NULL;
+   untracked_buff = NULL;
+
    check_lit();
+
+   int buff_s = 0;
+   char* mv = malloc(buff_s);
+   if (mv == NULL)
+      return NULL;
+   untracked_buff = mv;
 
    struct dirent** files;
    int file_count = scandir(".", &files, &status_filter, &status_compar);
 
    int ent = 0;
-   if (dir_count)
-      *dir_count = 0;
    if (files[ent]->d_type == DT_DIR)
    {
-      printf("Untracked Directories:\n");
-      printf("  (NOTE: lit doesn't support nesting of files)\n");
+      snprintf(untracked_buff, buff_s, "Untracked Directories:\n");
+      snprintf(untracked_buff, buff_s, "  (NOTE: lit doesn't support nesting of files)\n");
    }
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      printf("    /%s\n", files[ent]->d_name);
+      snprintf(untracked_buff, buff_s, "    /%s\n", files[ent]->d_name);
       free(files[ent]);
 
       if (dir_count)
@@ -68,8 +77,6 @@ FILE* hash_objects(int* dir_count, int* reg_count)
    if (fp == NULL)
       return NULL;
 
-   if (reg_count)
-      *reg_count = 0;
    for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
       size_t command_n = strlen(files[ent]->d_name) + 7;
@@ -97,6 +104,12 @@ FILE* hash_objects(int* dir_count, int* reg_count)
    }
    free(files);
 
+   if (dir_count)
+      *dir_count = dc;
+   if (reg_count)
+      *reg_count = rc;
+   buff_size = buff_s;
+   untracked_buff = ;
    return fp;
 }
 int main(int argc, const char* argv[])
@@ -114,7 +127,7 @@ int main(int argc, const char* argv[])
    {
       int dir_count;
       int reg_count;
-      FILE* fp = hash_objects(&dir_count, &reg_count);
+      FILE* fp = determine_objects(&dir_count, &reg_count, );
       if (fp == NULL)
          return -1;
 
@@ -153,14 +166,17 @@ int main(int argc, const char* argv[])
       if (ferror(fp))
          perror("Error while reading status.lit");
 
-      printf("%d:%d\n", dir_count, reg_count);
+      //printf("%d:%d:%d\n", dir_count, reg_count, tracked_count);
       if (reg_count)
       {
-         if (dir_count)
-            printf("\n");
+         if (tracked_count)
+         {
+            if (dir_count)
+               printf("\n");
 
-         printf("Tracked Files:\n");
-         printf("%s", track);
+            printf("Tracked Files:\n");
+            printf("%s", track);
+         }
       }
 
       fclose(fp);
