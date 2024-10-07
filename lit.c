@@ -11,26 +11,28 @@ void print_usage()
 {
    printf("usage: lit [<command>]\n");
 }
-void check_lit()
+int check_lit(int complain)
 {
    if (access(".lit", F_OK))
    {
-      printf("not a lit repository\n");
-      printf("  (run \"lit init\" to initialize repository)\n");
-      exit(EXIT_FAILURE);
+      if (complain)
+         printf("not a lit repository\n");
+      return -1;
    }
    if (access(".lit/objects", F_OK))
    {
-      printf("Error: directory \".lit/objects\" not found\n");
-      printf("  (run \"lit init\" to reinitialize repository)\n");
-      exit(EXIT_FAILURE);
+      if (complain)
+         printf("warning: directory \".lit/objects\" not found\n");
+      return -1;
    }
    if (access(".lit/refs", F_OK))
    {
-      printf("Error: directory \".lit/refs\" not found\n");
-      printf("  (run \"lit init\" to reinitialize repository)\n");
-      exit(EXIT_FAILURE);
+      if (complain)
+         printf("warning: directory \".lit/refs\" not found\n");
+      return -1;
    }
+
+   return 0;
 }
 int status_filter(const struct dirent* ent)
 {
@@ -47,7 +49,11 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    int dir_count = 0;
    int reg_count = 0;
 
-   check_lit();
+   if (check_lit(1))
+   {
+      printf("  (run \"lit init\" to reinitialize repository)\n");
+      exit(EXIT_FAILURE);
+   }
 
    FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "w");
    if (status_untracked_file == NULL)
@@ -115,9 +121,24 @@ int main(int argc, const char* argv[])
 
    if (strcmp(argv[1], "init") == 0)
    {
-      mkdir(".lit/", 777);
-      mkdir(".lit/objects/", 777);
-      mkdir(".lit/refs/", 777);
+      if (access(".lit/", F_OK))
+      {
+         mkdir(".lit/", 0777);
+         mkdir(".lit/objects/", 0777);
+         mkdir(".lit/refs/", 0777);
+         printf("lit repository created\n");
+      }
+      else
+      {
+         if (check_lit(0))
+         {
+            mkdir(".lit/objects/", 0777);
+            mkdir(".lit/refs/", 0777);
+            printf("Missing lit files re-initialzed\n");
+         }
+         else
+            printf("Already a lit repository\n");
+      }
    }
    else if (strcmp(argv[1], "status") == 0)
    {
