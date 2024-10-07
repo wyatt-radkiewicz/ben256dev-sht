@@ -40,20 +40,18 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-FILE* determine_objects(int* dir_count, int* reg_count, char* restrict untracked_buff, size_t* buff_size)
+FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 {
-   int dc = 0;
-   int rc = 0;
-   buff_size = NULL;
-   untracked_buff = NULL;
+   if (dir_count_ptr == NULL || reg_count_ptr == NULL)
+      goto DETERMINE_OBJECTS_RET_NULL;
+   int dir_count = 0;
+   int reg_count = 0;
 
    check_lit();
 
-   int buff_s = 0;
-   char* mv = malloc(buff_s);
-   if (mv == NULL)
-      return NULL;
-   untracked_buff = mv;
+   FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "w");
+   if (status_untracked_file == NULL)
+      goto DETERMINE_OBJECTS_RET_NULL;
 
    struct dirent** files;
    int file_count = scandir(".", &files, &status_filter, &status_compar);
@@ -61,21 +59,18 @@ FILE* determine_objects(int* dir_count, int* reg_count, char* restrict untracked
    int ent = 0;
    if (files[ent]->d_type == DT_DIR)
    {
-      snprintf(untracked_buff, buff_s, "Untracked Directories:\n");
-      snprintf(untracked_buff, buff_s, "  (NOTE: lit doesn't support nesting of files)\n");
+      fprintf(status_untracked_file, "Untracked Directories:\n  (NOTE: lit doesn't support nesting of files)\n");
    }
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      snprintf(untracked_buff, buff_s, "    /%s\n", files[ent]->d_name);
+      fprintf(status_untracked_file, "    /%s\n", files[ent]->d_name);
       free(files[ent]);
-
-      if (dir_count)
-         (*dir_count)++;
+      dir_count++;
    }
 
-   FILE* fp = freopen(".lit/status.lit", "w", stdout);
-   if (fp == NULL)
-      return NULL;
+   const FILE* status_file = freopen(".lit/status.lit", "w", stdout);
+   if (status_file == NULL)
+      goto DETERMINE_OBJECTS_RET_NULL;
 
    for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
@@ -91,12 +86,11 @@ FILE* determine_objects(int* dir_count, int* reg_count, char* restrict untracked
 
       free(files[ent]);
 
-      if (reg_count)
-         (*reg_count)++;
+      reg_count++;
    }
    const FILE* stdfp = freopen("/dev/tty", "w", stdout);
    if (stdfp == NULL)
-      return NULL;
+      goto DETERMINE_OBJECTS_RET_NULL;
 
    for (; ent < file_count; ent++)
    {
@@ -104,18 +98,20 @@ FILE* determine_objects(int* dir_count, int* reg_count, char* restrict untracked
    }
    free(files);
 
-   if (dir_count)
-      *dir_count = dc;
-   if (reg_count)
-      *reg_count = rc;
-   buff_size = buff_s;
-   untracked_buff = ;
-   return fp;
+   *dir_count_ptr      = dir_count;
+   *reg_count_ptr      = reg_count;
+   return status_untracked_file;
+
+DETERMINE_OBJECTS_RET_NULL:
+   return NULL;
 }
 int main(int argc, const char* argv[])
 { 
    if (argc < 2)
+   {
       print_usage();
+      return -1;
+   }
 
    if (strcmp(argv[1], "init") == 0)
    {
@@ -125,21 +121,23 @@ int main(int argc, const char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      int dir_count;
-      int reg_count;
-      FILE* fp = determine_objects(&dir_count, &reg_count, );
-      if (fp == NULL)
+      int    dir_count;
+      int    reg_count;
+      FILE* rv = determine_objects(&dir_count, &reg_count);
+      if (rv == NULL)
+      {
          return -1;
+      }
+      fclose(rv);
 
-      fp = fopen(".lit/status.lit", "r");
+      FILE* fp = fopen(".lit/status.lit", "r");
 
       char*  pardir  = malloc(512);
       char*  hash    = malloc(65);
       char*  ref     = malloc(128);
 
-      size_t track_s = 512;
-      char*  track   = malloc(track_s);
-      
+      FILE* status_tracked_file = fopen(".lit/status-tracked.lit", "w");
+
       int tracked_count = 0;
       for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
@@ -152,19 +150,12 @@ int main(int argc, const char* argv[])
             continue;
 
          tracked_count++;
-         int wouldve = snprintf(track, track_s, "  %s\n", ref);
-         if (wouldve > track_s)
-         {
-            track_s = wouldve * 2;
-            char* t = realloc(track, track_s);
-            if (t == NULL)
-               return -1;
-
-            track = t;
-         }
+         fprintf(status_tracked_file, "  %s\n", ref);
       }
       if (ferror(fp))
          perror("Error while reading status.lit");
+
+      fclose(status_tracked_file);
 
       //printf("%d:%d:%d\n", dir_count, reg_count, tracked_count);
       if (reg_count)
@@ -172,10 +163,17 @@ int main(int argc, const char* argv[])
          if (tracked_count)
          {
             if (dir_count)
+            {
+               FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "r");
+               for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
+               fclose(status_untracked_file);
                printf("\n");
+            }
 
             printf("Tracked Files:\n");
-            printf("%s", track);
+            status_tracked_file = fopen(".lit/status-tracked.lit", "r");
+            for (char c; ( c = fgetc(status_tracked_file) ) != EOF; putchar(c));
+            fclose(status_tracked_file);
          }
       }
 
@@ -184,6 +182,5 @@ int main(int argc, const char* argv[])
       free(pardir);
       free(hash);
       free(ref);
-      free(track);
    }
 }
