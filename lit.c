@@ -55,8 +55,8 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
       exit(EXIT_FAILURE);
    }
 
-   FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "w");
-   if (status_untracked_file == NULL)
+   FILE* status_directories_file = fopen(".lit/status-directories.lit", "w");
+   if (status_directories_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
 
    struct dirent** files;
@@ -65,11 +65,11 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    int ent = 0;
    if (files[ent]->d_type == DT_DIR)
    {
-      fprintf(status_untracked_file, "Untracked Directories:\n  (NOTE: lit doesn't support nesting of files)\n");
+      fprintf(status_directories_file, "Untracked Directories:\n  (NOTE: lit doesn't support nesting of files)\n");
    }
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      fprintf(status_untracked_file, "    /%s\n", files[ent]->d_name);
+      fprintf(status_directories_file, "    /%s\n", files[ent]->d_name);
       free(files[ent]);
       dir_count++;
    }
@@ -106,7 +106,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 
    *dir_count_ptr      = dir_count;
    *reg_count_ptr      = reg_count;
-   return status_untracked_file;
+   return status_directories_file;
 
 DETERMINE_OBJECTS_RET_NULL:
    return NULL;
@@ -158,34 +158,39 @@ int main(int argc, const char* argv[])
       char*  ref     = malloc(128);
 
       FILE* status_tracked_file = fopen(".lit/status-tracked.lit", "w");
+      FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "w");
 
       int tracked_count = 0;
       for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
          snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
          if (access(pardir, F_OK))
-            continue;
+            goto STATUS_FILE_IS_UNTRACKED;
 
          snprintf(pardir, 512, ".lit/objects/%.2s/%.62s/", hash, hash+2);
          if (access(pardir, F_OK))
-            continue;
+            goto STATUS_FILE_IS_UNTRACKED;
 
          tracked_count++;
          fprintf(status_tracked_file, "  %s\n", ref);
+         continue;
+
+STATUS_FILE_IS_UNTRACKED:
+         fprintf(status_untracked_file, "  %s\n", ref);
       }
       if (ferror(fp))
          perror("Error while reading status.lit");
 
       fclose(status_tracked_file);
+      fclose(status_untracked_file);
 
-      //printf("%d:%d:%d\n", dir_count, reg_count, tracked_count);
       if (reg_count)
       {
          if (dir_count)
          {
-            FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "r");
-            for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
-            fclose(status_untracked_file);
+            FILE* status_directories_file = fopen(".lit/status-directories.lit", "r");
+            for (char c; ( c = fgetc(status_directories_file) ) != EOF; putchar(c));
+            fclose(status_directories_file);
          }
          if (tracked_count)
          {
@@ -195,6 +200,15 @@ int main(int argc, const char* argv[])
             status_tracked_file = fopen(".lit/status-tracked.lit", "r");
             for (char c; ( c = fgetc(status_tracked_file) ) != EOF; putchar(c));
             fclose(status_tracked_file);
+         }
+         if (tracked_count < reg_count)
+         {
+            if (dir_count + tracked_count)
+               printf("\n");
+            printf("Untracked Files:\n");
+            status_untracked_file = fopen(".lit/status-untracked.lit", "r");
+            for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
+            fclose(status_untracked_file);
          }
       }
 
