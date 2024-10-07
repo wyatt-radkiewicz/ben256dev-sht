@@ -160,16 +160,16 @@ int main(int argc, const char* argv[])
       //printf("%d:%d:%d\n", dir_count, reg_count, tracked_count);
       if (reg_count)
       {
+         if (dir_count)
+         {
+            FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "r");
+            for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
+            fclose(status_untracked_file);
+         }
          if (tracked_count)
          {
             if (dir_count)
-            {
-               FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "r");
-               for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
-               fclose(status_untracked_file);
                printf("\n");
-            }
-
             printf("Tracked Files:\n");
             status_tracked_file = fopen(".lit/status-tracked.lit", "r");
             for (char c; ( c = fgetc(status_tracked_file) ) != EOF; putchar(c));
