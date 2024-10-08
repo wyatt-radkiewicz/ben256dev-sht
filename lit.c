@@ -289,10 +289,10 @@ STATUS_FREE_BUFFERS:
          strcpy(args_need_match[i], argv[i + 2]);
       }
 
-      FILE* added_file = fopen("lit.add-track.lit", "w");
+      FILE* added_file = fopen(".lit/add-track.lit", "w");
       if (added_file == NULL)
       {
-         perror("Error: failed to open added file");
+         perror("Error: failed to open add file");
          return -1;
       }
 
