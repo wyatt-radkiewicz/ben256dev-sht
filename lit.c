@@ -435,18 +435,33 @@ STATUS_FREE_BUFFERS:
                   perror("Error: failed to open object file for write");
                   return -1;
                }
-               FILE* file_ref    = fopen(ref, "r");
+               FILE* file_actual = fopen(ref, "r");
+               if (file_actual == NULL)
+               {
+                  perror("Error: failed to open actual file for read");
+                  return -1;
+               }
+
+               for (int ch; (ch = fgetc(file_actual)) != EOF; )
+                  fputc(ch, file_object);
+
+               fclose(file_object);
+               fclose(file_actual);
+
+               wb = snprintf(pardir, 512, ".lit/refs/%s", ref);
+               if (wb >= 512)
+               {
+                  fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+                  return -1;
+               }
+
+               FILE* file_ref = fopen(pardir, "w");
                if (file_ref == NULL)
                {
                   perror("Error: failed to open ref file for read");
                   return -1;
                }
-
-               for (int ch; (ch = fgetc(file_ref)) != EOF; )
-                  fputc(ch, file_object);
-
-               fclose(file_object);
-               fclose(file_ref);
+               fprintf(file_ref, "%s\n", hash);
 
                fprintf(added_file, "%s\n", args_need_match[i]);
                args_need_match[i] = NULL;
