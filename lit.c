@@ -11,25 +11,19 @@ void print_usage()
 {
    printf("usage: lit [<command>]\n");
 }
-int check_lit(int complain)
+int check_lit()
 {
    if (access(".lit", F_OK))
    {
-      if (complain)
-         printf("not a lit repository\n");
-      return -1;
+      return 1;
    }
    if (access(".lit/objects", F_OK))
    {
-      if (complain)
-         printf("warning: directory \".lit/objects\" not found\n");
-      return -1;
+      return 2;
    }
    if (access(".lit/refs", F_OK))
    {
-      if (complain)
-         printf("warning: directory \".lit/refs\" not found\n");
-      return -1;
+      return 3;
    }
 
    return 0;
@@ -44,16 +38,8 @@ int status_compar(const struct dirent** a, const struct dirent** b)
 }
 FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 {
-   if (dir_count_ptr == NULL || reg_count_ptr == NULL)
-      goto DETERMINE_OBJECTS_RET_NULL;
    int dir_count = 0;
    int reg_count = 0;
-
-   if (check_lit(1))
-   {
-      printf("  (run \"lit init\" to reinitialize repository)\n");
-      exit(EXIT_FAILURE);
-   }
 
    FILE* status_directories_file = fopen(".lit/status-directories.lit", "w");
    if (status_directories_file == NULL)
@@ -62,11 +48,13 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    struct dirent** files;
    int file_count = scandir(".", &files, &status_filter, &status_compar);
 
-   int ent = 0;
-   if (files[ent]->d_type == DT_DIR)
+   if (files[0]->d_type == DT_DIR)
    {
-      fprintf(status_directories_file, "Untracked Directories:\n  (NOTE: lit doesn't support nesting of files)\n");
+      fprintf(status_directories_file, "Untracked Directories:\n");
+      fprintf(status_directories_file, "  (NOTE: lit doesn't support nesting of files)\n");
    }
+
+   int ent = 0;
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
       fprintf(status_directories_file, "    /%s\n", files[ent]->d_name);
@@ -85,7 +73,12 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
       if (command_s == NULL)
          exit(EXIT_FAILURE);
 
-      snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
+      int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
+      if (wb >= command_n)
+      {
+         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+         return NULL;
+      }
       int rv = system(command_s);
       if (rv == -1)
          perror("b3sum sys call failed");
@@ -104,8 +97,11 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    }
    free(files);
 
-   *dir_count_ptr      = dir_count;
-   *reg_count_ptr      = reg_count;
+   if (dir_count_ptr)
+      *dir_count_ptr      = dir_count;
+   if (reg_count_ptr)
+      *reg_count_ptr      = reg_count;
+
    return status_directories_file;
 
 DETERMINE_OBJECTS_RET_NULL:
@@ -121,31 +117,83 @@ int main(int argc, const char* argv[])
 
    if (strcmp(argv[1], "init") == 0)
    {
-      if (access(".lit/", F_OK))
+      int cl = check_lit();
+      switch (cl)
       {
-         mkdir(".lit/", 0777);
-         mkdir(".lit/objects/", 0777);
-         mkdir(".lit/refs/", 0777);
-         printf("lit repository created\n");
-      }
-      else
-      {
-         if (check_lit(0))
-         {
-            mkdir(".lit/objects/", 0777);
-            mkdir(".lit/refs/", 0777);
-            printf("Missing lit files re-initialzed\n");
-         }
-         else
+         case 1:
+            if (mkdir(".lit/", 0777))
+            {
+               perror("Error: failed to make lit directory");
+               return -1;
+            }
+            if (mkdir(".lit/objects/", 0777))
+            {
+               perror("Error: failed to make lit objects directory");
+               return -1;
+            }
+            if (mkdir(".lit/refs/", 0777))
+            {
+               perror("Error: failed to make lit refs directory");
+               return -1;
+            }
+            printf("lit repository created\n");
+            break;
+         case 2:
+            if (mkdir(".lit/objects/", 0777))
+            {
+               perror("Error: failed to make lit refs directory");
+               return -1;
+            }
+            break;
+         case 3:
+            if (mkdir(".lit/refs/", 0777))
+            {
+               perror("Error: failed to make lit refs directory");
+               return -1;
+            }
+            break;
+         default:
             printf("Already a lit repository\n");
+      }
+      switch (cl)
+      {
+         case 2:
+         case 3:
+            printf("Missing lit files re-initialzed\n");
       }
 
       return 0;
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      int    dir_count;
-      int    reg_count;
+      int cl;
+      if ((cl = check_lit()))
+      {
+         switch (cl)
+         {
+            case 1:
+               printf("Not a lit repository\n");
+               printf("  (run \"lit init\" to initialize repository)\n");
+               break;
+            case 2:
+               fprintf(stderr, "Error: directory \".lit/objects\" not found\n");
+               break;
+            case 3:
+               fprintf(stderr, "Error: directory \".lit/refs\" not found\n");
+               break;
+         }
+         switch (cl)
+         {
+            case 2:
+            case 3:
+               printf("  (run \"lit init\" to fix these files)\n");
+         }
+
+         return 0;
+      }
+
+      int dir_count;
+      int reg_count;
       FILE* rv = determine_objects(&dir_count, &reg_count);
       if (rv == NULL)
       {
@@ -156,13 +204,18 @@ int main(int argc, const char* argv[])
       FILE* fp = fopen(".lit/status.lit", "r");
       if (fp == NULL)
       {
-         perror("Error: failed to open status_file");
+         perror("Error: failed to open status file");
          return -1;
       }
 
-      char*  pardir  = malloc(512);
-      char*  hash    = malloc(65);
-      char*  ref     = malloc(128);
+      char* pardir  = malloc(512);
+      char* hash    = malloc(65);
+      char* ref     = malloc(128);
+      if (pardir == NULL || hash == NULL || ref == NULL)
+      {
+         perror("Error: failed to allocate temporary buffers");
+         return -1;
+      }
 
       FILE* status_tracked_file = fopen(".lit/status-tracked.lit", "w");
       if (status_tracked_file == NULL)
@@ -180,11 +233,22 @@ int main(int argc, const char* argv[])
       int tracked_count = 0;
       for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
       {
-         snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+         int wb;
+         wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+         if (wb >= 512)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            return -1;
+         }
          if (access(pardir, F_OK))
             goto STATUS_FILE_IS_UNTRACKED;
 
-         snprintf(pardir, 512, ".lit/objects/%.2s/%.62s/", hash, hash+2);
+         wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+         if (wb >= 512)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            return -1;
+         }
          if (access(pardir, F_OK))
             goto STATUS_FILE_IS_UNTRACKED;
 
@@ -254,18 +318,58 @@ STATUS_FREE_BUFFERS:
    }
    else if (strcmp(argv[1], "add") == 0)
    {
+      int cl;
+      if ((cl = check_lit()))
+      {
+         switch (cl)
+         {
+            case 1:
+               printf("Not a lit repository\n");
+               printf("  (run \"lit init\" to initialize repository)\n");
+               break;
+            case 2:
+               fprintf(stderr, "Error: directory \".lit/objects\" not found\n");
+               break;
+            case 3:
+               fprintf(stderr, "Error: directory \".lit/refs\" not found\n");
+               break;
+         }
+         switch (cl)
+         {
+            case 2:
+            case 3:
+               printf("  (run \"lit init\" to fix these files)\n");
+         }
+
+         return 0;
+      }
+
       if (argc < 3)
       {
          printf("Nothing specified for \"%s add\"\n", argv[0]);
          printf("  try running \"%s add [FILE] ...\" to track files\n", argv[0]);
       }
-      char*  hash    = malloc(65);
-      char*  ref     = malloc(128);
+
+      FILE* rv = determine_objects(0, 0);
+      if (rv == NULL)
+      {
+         return -1;
+      }
+      fclose(rv);
+
+      char* pardir  = malloc(512);
+      char* hash    = malloc(65);
+      char* ref     = malloc(128);
+      if (pardir == NULL || hash == NULL || ref == NULL)
+      {
+         perror("Error: failed to allocate temporary buffers");
+         return -1;
+      }
 
       FILE* status_file = fopen(".lit/status.lit", "r");
       if (status_file == NULL)
       {
-         perror("Error: failed to open status_file");
+         perror("Error: failed to open status file");
          return -1;
       }
 
@@ -304,11 +408,50 @@ STATUS_FREE_BUFFERS:
                continue;
             if (strcmp(ref, args_need_match[i]) == 0)
             {
+               int wb;
+               wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+               if (wb >= 512)
+               {
+                  fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+                  return -1;
+               }
+
+               if (mkdir(pardir, 0777))
+               {
+                  perror("Error: failed to make object parent directory");
+                  return -1;
+               }
+
+               wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+               if (wb >= 512)
+               {
+                  fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+                  return -1;
+               }
+
+               FILE* file_object = fopen(pardir, "w");
+               if (file_object == NULL)
+               {
+                  perror("Error: failed to open object file for write");
+                  return -1;
+               }
+               FILE* file_ref    = fopen(ref, "r");
+               if (file_ref == NULL)
+               {
+                  perror("Error: failed to open ref file for read");
+                  return -1;
+               }
+
+               for (int ch; (ch = fgetc(file_ref)) != EOF; )
+                  fputc(ch, file_object);
+
+               fclose(file_object);
+               fclose(file_ref);
+
                fprintf(added_file, "%s\n", args_need_match[i]);
                args_need_match[i] = NULL;
             }
          }
-
       }
 
       for (int i = 0; i < add_argc; i++)
@@ -316,17 +459,13 @@ STATUS_FREE_BUFFERS:
          if (args_need_match[i] == NULL)
             continue;
          
-         printf("Error: \"%s\" does not match any status ref\n", args_need_match[i]);
+         fprintf(stderr, "Error: \"%s\" does not match any status ref\n", args_need_match[i]);
       }
-      /*
-      for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
-      {
-         snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
-         if (access(pardir, F_OK))
-            goto STATUS_FILE_IS_UNTRACKED;
 
-         snprintf(pardir, 512, ".lit/objects/%.2s/%.62s/", hash, hash+2);
-*/
+      free(pardir);
+      free(hash);
+      free(ref);
+
       free(args_need_match);
 
       return 0;
