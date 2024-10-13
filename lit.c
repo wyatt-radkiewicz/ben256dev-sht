@@ -347,8 +347,8 @@ STATUS_FREE_BUFFERS:
 
       if (argc < 3)
       {
-         printf("Nothing specified for \"%s add\"\n", argv[0]);
-         printf("  try running \"%s add [FILE] ...\" to track files\n", argv[0]);
+         printf("Nothing specified for \"%s store\"\n", argv[0]);
+         printf("  try running \"%s store [FILE] ...\" to track files\n", argv[0]);
       }
 
       FILE* rv = determine_objects(0, 0);
@@ -374,14 +374,14 @@ STATUS_FREE_BUFFERS:
          return -1;
       }
 
-      const int add_argc = argc - 2;
-      char** args_need_match = calloc(add_argc, sizeof(char*));
+      const int store_argc = argc - 2;
+      char** args_need_match = calloc(store_argc, sizeof(char*));
       if (args_need_match == NULL)
       {
          perror("Error: failed to malloc args_need_match");
          return -1;
       }
-      for (int i = 0; i < add_argc; i++)
+      for (int i = 0; i < store_argc; i++)
       {
          args_need_match[i] = malloc(strlen(argv[i + 2]) + 1);
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
@@ -394,16 +394,16 @@ STATUS_FREE_BUFFERS:
          strcpy(args_need_match[i], argv[i + 2]);
       }
 
-      FILE* added_file = fopen(".lit/add-track.lit", "w");
-      if (added_file == NULL)
+      FILE* stored_file = fopen(".lit/store-track.lit", "w");
+      if (stored_file == NULL)
       {
-         perror("Error: failed to open add file");
+         perror("Error: failed to open store file");
          return -1;
       }
 
       for (; fscanf(status_file, "%64s %128s", hash, ref) != EOF; )
       {
-         for (int i = 0; i < add_argc; i++)
+         for (int i = 0; i < store_argc; i++)
          {
             if (args_need_match[i] == NULL)
                continue;
@@ -464,13 +464,13 @@ STATUS_FREE_BUFFERS:
                }
                fprintf(file_ref, "%s\n", hash);
 
-               fprintf(added_file, "%s\n", args_need_match[i]);
+               fprintf(stored_file, "%s\n", args_need_match[i]);
                args_need_match[i] = NULL;
             }
          }
       }
 
-      for (int i = 0; i < add_argc; i++)
+      for (int i = 0; i < store_argc; i++)
       {
          if (args_need_match[i] == NULL)
             continue;
