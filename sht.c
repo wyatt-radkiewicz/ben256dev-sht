@@ -9,19 +9,19 @@
 
 void print_usage()
 {
-   printf("usage: lit [<command>]\n");
+   printf("usage: sht [<command>]\n");
 }
-int check_lit()
+int check_sht()
 {
-   if (access(".lit", F_OK))
+   if (access(".sht", F_OK))
    {
       return 1;
    }
-   if (access(".lit/objects", F_OK))
+   if (access(".sht/objects", F_OK))
    {
       return 2;
    }
-   if (access(".lit/refs", F_OK))
+   if (access(".sht/refs", F_OK))
    {
       return 3;
    }
@@ -41,7 +41,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    int dir_count = 0;
    int reg_count = 0;
 
-   FILE* status_directories_file = fopen(".lit/status-directories.lit", "w");
+   FILE* status_directories_file = fopen(".sht/status-directories.sht", "w");
    if (status_directories_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
 
@@ -51,7 +51,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    if (files[0]->d_type == DT_DIR)
    {
       fprintf(status_directories_file, "Untracked Directories:\n");
-      fprintf(status_directories_file, "  (NOTE: lit doesn't support nesting of files)\n");
+      fprintf(status_directories_file, "  (NOTE: sht doesn't support nesting of files)\n");
    }
 
    int ent = 0;
@@ -62,7 +62,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
       dir_count++;
    }
 
-   const FILE* status_file = freopen(".lit/status.lit", "w", stdout);
+   const FILE* status_file = freopen(".sht/status.sht", "w", stdout);
    if (status_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
 
@@ -129,7 +129,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
       }
       fclose(rv);
 
-      status_file_path = ".lit/status.lit";
+      status_file_path = ".sht/status.sht";
    }
    else
    {
@@ -190,7 +190,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
    int file_track_status = 0;
 
    int wb;
-   wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+   wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
    if (wb >= 512)
    {
       fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -199,7 +199,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
 
    if (!access(pardir, F_OK))
    {
-      wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+      wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
       if (wb >= 512)
       {
          fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -210,7 +210,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
          file_track_status |= 1;
    }
 
-   wb = snprintf(pardir, 512, ".lit/refs/%.128s", ref);
+   wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
    if (wb >= 512)
    {
       fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -246,49 +246,49 @@ int main(int argc, const char* argv[])
 
    if (strcmp(argv[1], "init") == 0)
    {
-      int cl = check_lit();
+      int cl = check_sht();
       switch (cl)
       {
          case 1:
-            if (mkdir(".lit/", 0777))
+            if (mkdir(".sht/", 0777))
             {
-               perror("Error: failed to make lit directory");
+               perror("Error: failed to make sht directory");
                return -1;
             }
-            if (mkdir(".lit/objects/", 0777))
+            if (mkdir(".sht/objects/", 0777))
             {
-               perror("Error: failed to make lit objects directory");
+               perror("Error: failed to make sht objects directory");
                return -1;
             }
-            if (mkdir(".lit/refs/", 0777))
+            if (mkdir(".sht/refs/", 0777))
             {
-               perror("Error: failed to make lit refs directory");
+               perror("Error: failed to make sht refs directory");
                return -1;
             }
-            printf("lit repository created\n");
+            printf("sht repository created\n");
             break;
          case 2:
-            if (mkdir(".lit/objects/", 0777))
+            if (mkdir(".sht/objects/", 0777))
             {
-               perror("Error: failed to make lit refs directory");
+               perror("Error: failed to make sht refs directory");
                return -1;
             }
             break;
          case 3:
-            if (mkdir(".lit/refs/", 0777))
+            if (mkdir(".sht/refs/", 0777))
             {
-               perror("Error: failed to make lit refs directory");
+               perror("Error: failed to make sht refs directory");
                return -1;
             }
             break;
          default:
-            printf("Already a lit repository\n");
+            printf("Already a sht repository\n");
       }
       switch (cl)
       {
          case 2:
          case 3:
-            printf("Missing lit files re-initialzed\n");
+            printf("Missing sht files re-initialzed\n");
       }
 
       return 0;
@@ -296,26 +296,26 @@ int main(int argc, const char* argv[])
    else if (strcmp(argv[1], "status") == 0)
    {
       int cl;
-      if ((cl = check_lit()))
+      if ((cl = check_sht()))
       {
          switch (cl)
          {
             case 1:
-               printf("Not a lit repository\n");
-               printf("  (run \"lit init\" to initialize repository)\n");
+               printf("Not a sht repository\n");
+               printf("  (run \"sht init\" to initialize repository)\n");
                break;
             case 2:
-               fprintf(stderr, "Error: directory \".lit/objects\" not found\n");
+               fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
                break;
             case 3:
-               fprintf(stderr, "Error: directory \".lit/refs\" not found\n");
+               fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
                break;
          }
          switch (cl)
          {
             case 2:
             case 3:
-               printf("  (run \"lit init\" to fix these files)\n");
+               printf("  (run \"sht init\" to fix these files)\n");
          }
 
          return 0;
@@ -330,7 +330,7 @@ int main(int argc, const char* argv[])
       }
       fclose(rv);
 
-      FILE* fp = fopen(".lit/status.lit", "r");
+      FILE* fp = fopen(".sht/status.sht", "r");
       if (fp == NULL)
       {
          perror("Error: failed to open status file");
@@ -341,13 +341,13 @@ int main(int argc, const char* argv[])
       char hash[65];
       char ref[128];
 
-      FILE* status_tracked_file = fopen(".lit/status-tracked.lit", "w");
+      FILE* status_tracked_file = fopen(".sht/status-tracked.sht", "w");
       if (status_tracked_file == NULL)
       {
          perror("Error: failed to open status_tracked_file");
          goto STATUS_FREE_BUFFERS;
       }
-      FILE* status_untracked_file = fopen(".lit/status-untracked.lit", "w");
+      FILE* status_untracked_file = fopen(".sht/status-untracked.sht", "w");
       if (status_untracked_file == NULL)
       {
          perror("Error: failed to open status_untracked_file");
@@ -358,7 +358,7 @@ int main(int argc, const char* argv[])
       for (; fscanf(fp, "%64s %127s", hash, ref) != EOF; )
       {
          int wb;
-         wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+         wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
          if (wb >= 512)
          {
             fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -367,7 +367,7 @@ int main(int argc, const char* argv[])
          if (access(pardir, F_OK))
             goto STATUS_FILE_IS_UNTRACKED;
 
-         wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+         wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
          if (wb >= 512)
          {
             fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -384,7 +384,7 @@ STATUS_FILE_IS_UNTRACKED:
          fprintf(status_untracked_file, "  %s\n", ref);
       }
       if (ferror(fp))
-         perror("Error while reading status.lit");
+         perror("Error while reading status.sht");
 
       fclose(fp);
       fclose(status_tracked_file);
@@ -394,7 +394,7 @@ STATUS_FILE_IS_UNTRACKED:
       {
          if (dir_count)
          {
-            FILE* status_directories_file = fopen(".lit/status-directories.lit", "r");
+            FILE* status_directories_file = fopen(".sht/status-directories.sht", "r");
             if (status_directories_file == NULL)
             {
                perror("Error: failed to open status_directories_file");
@@ -408,7 +408,7 @@ STATUS_FILE_IS_UNTRACKED:
             if (dir_count)
                printf("\n");
             printf("Tracked Files:\n");
-            status_tracked_file = fopen(".lit/status-tracked.lit", "r");
+            status_tracked_file = fopen(".sht/status-tracked.sht", "r");
             if (status_tracked_file == NULL)
             {
                perror("Error: failed to open status_tracked_file");
@@ -422,7 +422,7 @@ STATUS_FILE_IS_UNTRACKED:
             if (dir_count + tracked_count)
                printf("\n");
             printf("Untracked Files:\n");
-            status_untracked_file = fopen(".lit/status-untracked.lit", "r");
+            status_untracked_file = fopen(".sht/status-untracked.sht", "r");
             if (status_untracked_file == NULL)
             {
                perror("Error: failed to open status_untracked_file");
@@ -439,26 +439,26 @@ STATUS_FREE_BUFFERS:
    else if (strcmp(argv[1], "store") == 0)
    {
       int cl;
-      if ((cl = check_lit()))
+      if ((cl = check_sht()))
       {
          switch (cl)
          {
             case 1:
-               printf("Not a lit repository\n");
-               printf("  (run \"lit init\" to initialize repository)\n");
+               printf("Not a sht repository\n");
+               printf("  (run \"sht init\" to initialize repository)\n");
                break;
             case 2:
-               fprintf(stderr, "Error: directory \".lit/objects\" not found\n");
+               fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
                break;
             case 3:
-               fprintf(stderr, "Error: directory \".lit/refs\" not found\n");
+               fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
                break;
          }
          switch (cl)
          {
             case 2:
             case 3:
-               printf("  (run \"lit init\" to fix these files)\n");
+               printf("  (run \"sht init\" to fix these files)\n");
          }
 
          return 0;
@@ -481,7 +481,7 @@ STATUS_FREE_BUFFERS:
       char hash[65];
       char ref[128];
 
-      FILE* status_file = fopen(".lit/status.lit", "r");
+      FILE* status_file = fopen(".sht/status.sht", "r");
       if (status_file == NULL)
       {
          perror("Error: failed to open status file");
@@ -508,7 +508,7 @@ STATUS_FREE_BUFFERS:
          strcpy(args_need_match[i], argv[i + 2]);
       }
 
-      FILE* stored_file = fopen(".lit/store-track.lit", "w");
+      FILE* stored_file = fopen(".sht/store-track.sht", "w");
       if (stored_file == NULL)
       {
          perror("Error: failed to open store file");
@@ -524,7 +524,7 @@ STATUS_FREE_BUFFERS:
             if (strcmp(ref, args_need_match[i]) == 0)
             {
                int wb;
-               wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+               wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
                if (wb >= 512)
                {
                   fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -537,7 +537,7 @@ STATUS_FREE_BUFFERS:
                   return -1;
                }
 
-               wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+               wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
                if (wb >= 512)
                {
                   fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -563,7 +563,7 @@ STATUS_FREE_BUFFERS:
                fclose(file_object);
                fclose(file_actual);
 
-               wb = snprintf(pardir, 512, ".lit/refs/%s", ref);
+               wb = snprintf(pardir, 512, ".sht/refs/%s", ref);
                if (wb >= 512)
                {
                   fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
