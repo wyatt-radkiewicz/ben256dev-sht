@@ -108,6 +108,134 @@ DETERMINE_OBJECTS_RET_NULL:
    return NULL;
 }
 
+int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
+{
+   const char* status_file_path;
+   char pardir[512];
+   char hash[65];
+   char ref[128];
+
+   /*
+      fprintf(stderr, "unsupported flag \"%s\"\n", argv[3]);
+      goto SHT_CHECK_RET_ERROR;
+   */
+
+   if (strcmp("--status", argv[3]) == 0)
+   {
+      FILE* rv = determine_objects(0, 0);
+      if (rv == NULL)
+      {
+         goto SHT_CHECK_RET_ERROR;
+      }
+      fclose(rv);
+
+      status_file_path = ".lit/status.lit";
+   }
+   else
+   {
+      struct stat status_file_stats;
+      int sv = stat(argv[3], &status_file_stats);
+
+      if (sv != 0)
+      {
+         fprintf(stderr, "Error: could not stat provided status file \"%s\"\n", argv[3]);
+         goto SHT_CHECK_RET_ERROR;
+      }
+         
+      if (!S_ISREG(status_file_stats.st_mode))
+      {
+         fprintf(stderr, "Error: provided status file \"%s\" should be regular\n", argv[3]);
+         goto SHT_CHECK_RET_ERROR;
+      }
+
+      status_file_path = argv[3];
+   }
+
+   FILE* status_file = fopen(status_file_path, "r");
+   if (status_file == NULL)
+   {
+      perror("Error: failed to open status file");
+      goto SHT_CHECK_RET_ERROR;
+   }
+
+   int found_file = 0;
+   for (; fscanf(status_file, "%64s %127s", hash, ref) != EOF; )
+   {
+      if (strcmp(ref, argv[2]) == 0)
+      {
+         found_file = 1;
+         break;
+      }
+   }
+
+   if (found_file == 0)
+   {
+      struct stat check_file_stats;
+      int sv = stat(argv[2], &check_file_stats);
+
+      if (sv != 0)
+      {
+         fprintf(stderr, "Error: file %s was neither found in an existing status nor is it present in your directory\n", argv[2]);
+         fprintf(stderr, "  Are you trying to check a file which was presently detected by status?\n");
+         fprintf(stderr, "  NOTE: running --status overwrites previous detections by status for currently non-existing files\n");
+
+         goto SHT_CHECK_RET_ERROR;
+      }
+
+      fprintf(stderr, "Error: could not find file \"%s\" in status\n", argv[2]);
+      fprintf(stderr, "  (try running %s %s %s --status or run %s status first)\n", argv[0], argv[1], argv[2], argv[0]);
+      goto SHT_CHECK_RET_ERROR;
+   }
+
+   int file_track_status = 0;
+
+   int wb;
+   wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
+   if (wb >= 512)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      goto SHT_CHECK_RET_ERROR;
+   }
+
+   if (!access(pardir, F_OK))
+   {
+      wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
+      if (wb >= 512)
+      {
+         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+         goto SHT_CHECK_RET_ERROR;
+      }
+
+      if (!access(pardir, F_OK))
+         file_track_status |= 1;
+   }
+
+   wb = snprintf(pardir, 512, ".lit/refs/%.128s", ref);
+   if (wb >= 512)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      goto SHT_CHECK_RET_ERROR;
+   }
+
+   if (!access(pardir, F_OK))
+      file_track_status |= 2;
+
+   if (hash_ptr)
+      (*hash_ptr) = hash;
+   if (ref_ptr)
+      (*ref_ptr) = ref;
+
+   return file_track_status;
+
+SHT_CHECK_RET_ERROR:
+   if (hash_ptr)
+      (*hash_ptr) = hash;
+   if (ref_ptr)
+      (*ref_ptr) = ref;
+   
+   return -1;
+}
+
 int main(int argc, const char* argv[])
 { 
    if (argc < 2)
@@ -209,14 +337,9 @@ int main(int argc, const char* argv[])
          return -1;
       }
 
-      char* pardir  = malloc(512);
-      char* hash    = malloc(65);
-      char* ref     = malloc(128);
-      if (pardir == NULL || hash == NULL || ref == NULL)
-      {
-         perror("Error: failed to allocate temporary buffers");
-         return -1;
-      }
+      char pardir[512];
+      char hash[65];
+      char ref[128];
 
       FILE* status_tracked_file = fopen(".lit/status-tracked.lit", "w");
       if (status_tracked_file == NULL)
@@ -232,7 +355,7 @@ int main(int argc, const char* argv[])
       }
 
       int tracked_count = 0;
-      for (; fscanf(fp, "%64s %128s", hash, ref) != EOF; )
+      for (; fscanf(fp, "%64s %127s", hash, ref) != EOF; )
       {
          int wb;
          wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
@@ -311,10 +434,6 @@ STATUS_FILE_IS_UNTRACKED:
       }
 
 STATUS_FREE_BUFFERS:
-      free(pardir);
-      free(hash);
-      free(ref);
-
       return 0;
    }
    else if (strcmp(argv[1], "store") == 0)
@@ -358,14 +477,9 @@ STATUS_FREE_BUFFERS:
       }
       fclose(rv);
 
-      char* pardir  = malloc(512);
-      char* hash    = malloc(65);
-      char* ref     = malloc(128);
-      if (pardir == NULL || hash == NULL || ref == NULL)
-      {
-         perror("Error: failed to allocate temporary buffers");
-         return -1;
-      }
+      char pardir[512];
+      char hash[65];
+      char ref[128];
 
       FILE* status_file = fopen(".lit/status.lit", "r");
       if (status_file == NULL)
@@ -401,7 +515,7 @@ STATUS_FREE_BUFFERS:
          return -1;
       }
 
-      for (; fscanf(status_file, "%64s %128s", hash, ref) != EOF; )
+      for (; fscanf(status_file, "%64s %127s", hash, ref) != EOF; )
       {
          for (int i = 0; i < store_argc; i++)
          {
@@ -478,15 +592,11 @@ STATUS_FREE_BUFFERS:
          fprintf(stderr, "Error: \"%s\" does not match any status ref\n", args_need_match[i]);
       }
 
-      free(pardir);
-      free(hash);
-      free(ref);
-
       free(args_need_match);
 
       return 0;
    }
-   else if (strcmp(argv[1], "take") == 0)
+   else if (strcmp(argv[1], "check") == 0)
    {
       if (argc != 4)
       {
@@ -494,124 +604,13 @@ STATUS_FREE_BUFFERS:
          return 0;
       }
 
-      const char* status_file_path;
-
-
-      /*
-         fprintf(stderr, "unsupported flag \"%s\"\n", argv[3]);
-         return -1;
-      */
-      if (strcmp("--status", argv[3]) == 0)
+      char* hash;
+      char* ref;
+      switch (sht_check(argv, &ref, &hash))
       {
-         FILE* rv = determine_objects(0, 0);
-         if (rv == NULL)
-         {
+         case -1:
             return -1;
-         }
-         fclose(rv);
-
-         status_file_path = ".lit/status.lit";
-      }
-      else
-      {
-         struct stat status_file_stats;
-         int sv = stat(argv[3], &status_file_stats);
-
-         if (sv != 0)
-         {
-            fprintf(stderr, "Error: could not stat provided status file \"%s\"\n", argv[3]);
-            return -1;
-         }
-            
-         if (!S_ISREG(status_file_stats.st_mode))
-         {
-            fprintf(stderr, "Error: provided status file \"%s\" should be regular\n", argv[3]);
-            return -1;
-         }
-
-         status_file_path = argv[3];
-      }
-
-      char* pardir  = malloc(512);
-      char* hash    = malloc(65);
-      char* ref     = malloc(128);
-      if (pardir == NULL || hash == NULL || ref == NULL)
-      {
-         perror("Error: failed to allocate temporary buffers");
-         return -1;
-      }
-
-      FILE* status_file = fopen(status_file_path, "r");
-      if (status_file == NULL)
-      {
-         perror("Error: failed to open status file");
-         return -1;
-      }
-
-      int found_file = 0;
-      for (; fscanf(status_file, "%64s %128s", hash, ref) != EOF; )
-      {
-         if (strcmp(ref, argv[2]) == 0)
-         {
-            found_file = 1;
             break;
-         }
-      }
-
-      if (found_file == 0)
-      {
-         struct stat check_file_stats;
-         int sv = stat(argv[2], &check_file_stats);
-
-         if (sv != 0)
-         {
-            fprintf(stderr, "Error: file %s was neither found in an existing status nor is it present in your directory\n", argv[2]);
-            fprintf(stderr, "  Are you trying to check a file which was presently detected by status?\n");
-            fprintf(stderr, "  NOTE: running --status overwrites previous detections by status for currently non-existing files\n");
-
-            return -1;
-         }
-
-         fprintf(stderr, "Error: could not find file \"%s\" in status\n", argv[2]);
-         fprintf(stderr, "  (try running %s %s %s --status or run %s status first)\n", argv[0], argv[1], argv[2], argv[0]);
-         return -1;
-      }
-
-      int file_track_status = 0;
-
-      int wb;
-      wb = snprintf(pardir, 512, ".lit/objects/%.2s/", hash);
-      if (wb >= 512)
-      {
-         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-         return -1;
-      }
-
-      if (!access(pardir, F_OK))
-      {
-         wb = snprintf(pardir, 512, ".lit/objects/%.2s/%.62s", hash, hash+2);
-         if (wb >= 512)
-         {
-            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-            return -1;
-         }
-
-         if (!access(pardir, F_OK))
-            file_track_status |= 1;
-      }
-
-      wb = snprintf(pardir, 512, ".lit/refs/%.128s", ref);
-      if (wb >= 512)
-      {
-         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-         return -1;
-      }
-
-      if (!access(pardir, F_OK))
-         file_track_status |= 2;
-
-      switch (file_track_status)
-      {
          case 0:
             printf("file \"%s\" contents are untracked and the name \"%s\" is unused\n", argv[2], ref);
             break;
@@ -625,10 +624,6 @@ STATUS_FREE_BUFFERS:
             printf("file \"%s\" contents are already tracked under same name \"%s\"\n", argv[2], ref);
             break;
       }
-
-      free(pardir);
-      free(hash);
-      free(ref);
 
       return 0;
    }
