@@ -109,6 +109,37 @@ int sht_get_ref(sht_ref_buff ref, sht_hash_buff* hash_out)
 
    return 0;
 }
+int sht_get_hash(sht_hash_buff hash, sht_pardir_buff* pardir_out)
+{
+   if (hash == NULL)
+      return -1;
+
+   sht_pardir_buff pardir;
+
+   int wb;
+   wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
+   if (wb >= 512)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      return -1;
+   }
+   if (access(pardir, F_OK))
+      return 1;
+   
+   wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
+   if (wb >= 512)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      return -1;
+   }
+   if (access(pardir, F_OK))
+      return 2;
+
+   if (pardir_out)
+      strcpy(*pardir_out, pardir);
+
+   return 0;
+}
 FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 {
    int dir_count = 0;
@@ -732,40 +763,45 @@ STATUS_FREE_BUFFERS:
          }
          args_need_match[i] = NULL;
 
-         int wb;
-         wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
-         if (wb >= 512)
+         int gh = sht_get_hash(hash, &pardir);
+         if (gh)
          {
-            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-            return -1;
-         }
-         if (access(pardir, F_OK))
-         {
-            fprintf(stderr, "Error: file \"%s\" ref found but object parent dir %.2s/ unaccessable\n", ref, hash);
-            goto SHT_WIPE_RET_ERR;
-         }
-         
-         wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
-         if (wb >= 512)
-         {
-            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-            goto SHT_WIPE_RET_ERR;
-         }
-         if (access(pardir, F_OK))
-         {
-            fprintf(stderr, "Error: file \"%s\" ref found but object file does not exist\n", ref);
+            if (gh == 1)
+               fprintf(stderr, "Error: file \"%s\" ref found but object parent dir %.2s/ unaccessable\n", ref, hash);
+            else if (gh == 2)
+               fprintf(stderr, "Error: file \"%s\" ref found but object file does not exist\n", ref);
+
             goto SHT_WIPE_RET_ERR;
          }
 
          if (remove(pardir))
          {
-            perror("Error: failed to remove file targeted for wipe");
+            fprintf(stderr, "Error: failed to remove object file \"%s\" targeted for wipe: ", pardir);
+            perror("");
             goto SHT_WIPE_RET_ERR;
          }
 
          // if parent directory to wiped file doesn't contain additional files, then we can wipe it aswell
 
          //remove file ref
+         int wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
+         if (wb >= 512)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            goto SHT_WIPE_RET_ERR;
+         }
+         if (access(pardir, F_OK))
+         {
+            fprintf(stderr, "Error: file \"%s\" ref found but tag not found inside refs\n", ref);
+            goto SHT_WIPE_RET_ERR;
+         }
+
+         if (remove(pardir))
+         {
+            fprintf(stderr, "Error: failed to remove ref file \"%s\" targeted for wipe: ", pardir);
+            perror("");
+            goto SHT_WIPE_RET_ERR;
+         }
       }
 
       for (int i = 0; i < wipe_argc; i++)
