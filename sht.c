@@ -7,11 +7,15 @@
 #include <stdlib.h>
 #include <errno.h>
 
-void print_usage()
+typedef char sht_pardir_buff   [512];
+typedef char sht_ref_buff      [128];
+typedef char sht_hash_buff     [65];
+
+void sht_print_usage()
 {
    printf("usage: sht [<command>]\n");
 }
-int check_sht()
+int sht_check_tree()
 {
    if (access(".sht", F_OK))
    {
@@ -28,15 +32,84 @@ int check_sht()
 
    return 0;
 }
-int status_filter(const struct dirent* ent)
+int sht_check_complain()
+{
+   int cl;
+   if ((cl = sht_check_tree()))
+   {
+      switch (cl)
+      {
+         case 1:
+            printf("Not a sht repository\n");
+            printf("  (run \"sht init\" to initialize repository)\n");
+            break;
+         case 2:
+            fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
+            break;
+         case 3:
+            fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
+            break;
+      }
+      switch (cl)
+      {
+         case 2:
+         case 3:
+            printf("  (run \"sht init\" to fix these files)\n");
+      }
+
+      return 0;
+   }
+
+   return cl;
+}
+int sht_status_filter(const struct dirent* ent)
 {
    return ent->d_type == DT_REG || ent->d_type == DT_DIR;
 }
-int status_compar(const struct dirent** a, const struct dirent** b)
+int sht_status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
+int sht_get_ref(sht_ref_buff ref, sht_hash_buff* hash_out)
+{
+   if (ref == NULL)
+      return -1;
+
+   sht_pardir_buff pardir;
+
+   int wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
+   if (wb >= 512)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      return -1;
+   }
+
+   if (access(pardir, F_OK))
+      return -1;
+
+   FILE* ref_file = fopen(pardir, "r");
+   if (ref_file == NULL)
+   {
+      perror("Error: failed to open ref file");
+      return -1;
+   }
+
+   sht_hash_buff hash;
+   int frv = fscanf(ref_file, "%64s", hash);
+
+   fclose(ref_file);
+
+   if (frv == EOF)
+      return EOF;
+   if (frv != 1)
+      return -1;
+
+   if (hash_out)
+      strcpy(*hash_out, pardir);
+
+   return 0;
+}
+FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 {
    int dir_count = 0;
    int reg_count = 0;
@@ -46,7 +119,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
       goto DETERMINE_OBJECTS_RET_NULL;
 
    struct dirent** files;
-   int file_count = scandir(".", &files, &status_filter, &status_compar);
+   int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
 
    if (files[0]->d_type == DT_DIR)
    {
@@ -92,7 +165,7 @@ FILE* determine_objects(int* dir_count_ptr, int* reg_count_ptr)
       goto DETERMINE_OBJECTS_RET_NULL;
 
    for (; ent < file_count; ent++)
-   {
+  {
       free(files[ent]);
    }
    free(files);
@@ -111,9 +184,10 @@ DETERMINE_OBJECTS_RET_NULL:
 int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
 {
    const char* status_file_path;
-   char pardir[512];
-   char hash[65];
-   char ref[128];
+
+   sht_pardir_buff pardir;
+   sht_ref_buff    ref;
+   sht_hash_buff   hash;
 
    /*
       fprintf(stderr, "unsupported flag \"%s\"\n", argv[3]);
@@ -122,7 +196,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
 
    if (strcmp("--status", argv[3]) == 0)
    {
-      FILE* rv = determine_objects(0, 0);
+      FILE* rv = sht_determine_objects(0, 0);
       if (rv == NULL)
       {
          goto SHT_CHECK_RET_ERROR;
@@ -240,13 +314,13 @@ int main(int argc, const char* argv[])
 { 
    if (argc < 2)
    {
-      print_usage();
+      sht_print_usage();
       return -1;
    }
 
    if (strcmp(argv[1], "init") == 0)
    {
-      int cl = check_sht();
+      int cl = sht_check_tree();
       switch (cl)
       {
          case 1:
@@ -295,35 +369,11 @@ int main(int argc, const char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      int cl;
-      if ((cl = check_sht()))
-      {
-         switch (cl)
-         {
-            case 1:
-               printf("Not a sht repository\n");
-               printf("  (run \"sht init\" to initialize repository)\n");
-               break;
-            case 2:
-               fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
-               break;
-            case 3:
-               fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
-               break;
-         }
-         switch (cl)
-         {
-            case 2:
-            case 3:
-               printf("  (run \"sht init\" to fix these files)\n");
-         }
-
-         return 0;
-      }
+      sht_check_complain();
 
       int dir_count;
       int reg_count;
-      FILE* rv = determine_objects(&dir_count, &reg_count);
+      FILE* rv = sht_determine_objects(&dir_count, &reg_count);
       if (rv == NULL)
       {
          return -1;
@@ -337,9 +387,9 @@ int main(int argc, const char* argv[])
          return -1;
       }
 
-      char pardir[512];
-      char hash[65];
-      char ref[128];
+      sht_pardir_buff pardir;
+      sht_ref_buff    ref;
+      sht_hash_buff   hash;
 
       FILE* status_tracked_file = fopen(".sht/status-tracked.sht", "w");
       if (status_tracked_file == NULL)
@@ -438,31 +488,7 @@ STATUS_FREE_BUFFERS:
    }
    else if (strcmp(argv[1], "store") == 0)
    {
-      int cl;
-      if ((cl = check_sht()))
-      {
-         switch (cl)
-         {
-            case 1:
-               printf("Not a sht repository\n");
-               printf("  (run \"sht init\" to initialize repository)\n");
-               break;
-            case 2:
-               fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
-               break;
-            case 3:
-               fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
-               break;
-         }
-         switch (cl)
-         {
-            case 2:
-            case 3:
-               printf("  (run \"sht init\" to fix these files)\n");
-         }
-
-         return 0;
-      }
+      sht_check_complain();
 
       if (argc < 3)
       {
@@ -470,16 +496,16 @@ STATUS_FREE_BUFFERS:
          printf("  try running \"%s store [FILE] ...\" to track files\n", argv[0]);
       }
 
-      FILE* rv = determine_objects(0, 0);
+      FILE* rv = sht_determine_objects(0, 0);
       if (rv == NULL)
       {
          return -1;
       }
       fclose(rv);
 
-      char pardir[512];
-      char hash[65];
-      char ref[128];
+      sht_pardir_buff pardir;
+      sht_ref_buff    ref;
+      sht_hash_buff   hash;
 
       FILE* status_file = fopen(".sht/status.sht", "r");
       if (status_file == NULL)
@@ -498,6 +524,11 @@ STATUS_FREE_BUFFERS:
       for (int i = 0; i < store_argc; i++)
       {
          args_need_match[i] = malloc(strlen(argv[i + 2]) + 1);
+         if (args_need_match[i] == NULL)
+         {
+            perror("Error: failed to malloc args_need_match");
+            goto SHT_WIPE_RET_ERR;
+         }
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
          {
             printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
@@ -587,11 +618,13 @@ STATUS_FREE_BUFFERS:
       for (int i = 0; i < store_argc; i++)
       {
          if (args_need_match[i] == NULL)
+         {
+            free(args_need_match[i]);
             continue;
+         }
          
          fprintf(stderr, "Error: \"%s\" does not match any status ref\n", args_need_match[i]);
       }
-
       free(args_need_match);
 
       return 0;
@@ -626,5 +659,134 @@ STATUS_FREE_BUFFERS:
       }
 
       return 0;
+   }
+   else if (strcmp(argv[1], "check-tree") == 0)
+   {
+      if (argc != 2)
+      {
+         printf("usage: %s %s\n", argv[1], argv[2]);
+         return 0;
+      }
+
+      sht_check_complain();
+      return 0;
+   }
+   else if (strcmp(argv[1], "wipe") == 0)
+   {
+      sht_check_complain();
+
+      if (argc < 3)
+      {
+         printf("Nothing specified for \"%s wipe\"\n", argv[0]);
+         printf("  try running \"%s wipe [FILE] ...\" to erase files\n", argv[0]);
+      }
+
+      FILE* rv = sht_determine_objects(0, 0);
+      if (rv == NULL)
+      {
+         return -1;
+      }
+      fclose(rv);
+
+      const int wipe_argc = argc - 2;
+      char** args_need_match = calloc(wipe_argc, sizeof(char*));
+      if (args_need_match == NULL)
+      {
+         perror("Error: failed to malloc args_need_match");
+         goto SHT_WIPE_RET_ERR;
+      }
+      for (int i = 0; i < wipe_argc; i++)
+      {
+         args_need_match[i] = malloc(strlen(argv[i + 2]) + 1);
+         if (args_need_match[i] == NULL)
+         {
+            perror("Error: failed to malloc args_need_match");
+            goto SHT_WIPE_RET_ERR;
+         }
+
+         if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
+         {
+            printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
+            printf("  (NOTE: \"%s %s\" does not support flags)\n", argv[0], argv[1]);
+            args_need_match[i] = NULL;
+            continue;
+         }
+         strcpy(args_need_match[i], argv[i + 2]);
+      }
+
+      sht_pardir_buff pardir;
+      sht_ref_buff    ref;
+      sht_hash_buff   hash;
+
+      for (int i = 0; i < wipe_argc; i++)
+      {
+         if (args_need_match[i] == NULL)
+            continue;
+
+         strcpy(ref, args_need_match[i]);
+
+         if (sht_get_ref(ref, &hash))
+         {
+            fprintf(stderr, "Error: ref file \"%s\" not found\n", ref);
+            goto SHT_WIPE_RET_ERR;
+         }
+         args_need_match[i] = NULL;
+
+         int wb;
+         wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
+         if (wb >= 512)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            return -1;
+         }
+         if (access(pardir, F_OK))
+         {
+            fprintf(stderr, "Error: file \"%s\" ref found but object parent dir unaccessable\n", ref);
+            goto SHT_WIPE_RET_ERR;
+         }
+         
+         wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
+         if (wb >= 512)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            goto SHT_WIPE_RET_ERR;
+         }
+         if (access(pardir, F_OK))
+         {
+            fprintf(stderr, "Error: file \"%s\" ref found but object file does not exist\n", ref);
+            goto SHT_WIPE_RET_ERR;
+         }
+
+         if (remove(pardir))
+         {
+            perror("Error: failed to remove file targeted for wipe");
+            goto SHT_WIPE_RET_ERR;
+         }
+
+         // if parent directory to wiped file doesn't contain additional files, then we can wipe it aswell
+      }
+
+      for (int i = 0; i < wipe_argc; i++)
+      {
+         if (args_need_match[i] == NULL)
+         {
+            free(args_need_match[i]);
+            continue;
+         }
+      }
+      free(args_need_match);
+      return 0;
+
+SHT_WIPE_RET_ERR:
+      for (int i = 0; i < wipe_argc; i++)
+      {
+         if (args_need_match[i] == NULL)
+         {
+            free(args_need_match[i]);
+            continue;
+         }
+      }
+      free(args_need_match);
+      return -1;
    }
 }
