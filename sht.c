@@ -105,7 +105,7 @@ int sht_get_ref(sht_ref_buff ref, sht_hash_buff* hash_out)
       return -1;
 
    if (hash_out)
-      strcpy(*hash_out, pardir);
+      strcpy(*hash_out, hash);
 
    return 0;
 }
@@ -741,7 +741,7 @@ STATUS_FREE_BUFFERS:
          }
          if (access(pardir, F_OK))
          {
-            fprintf(stderr, "Error: file \"%s\" ref found but object parent dir unaccessable\n", ref);
+            fprintf(stderr, "Error: file \"%s\" ref found but object parent dir %.2s/ unaccessable\n", ref, hash);
             goto SHT_WIPE_RET_ERR;
          }
          
@@ -764,6 +764,8 @@ STATUS_FREE_BUFFERS:
          }
 
          // if parent directory to wiped file doesn't contain additional files, then we can wipe it aswell
+
+         //remove file ref
       }
 
       for (int i = 0; i < wipe_argc; i++)
