@@ -144,7 +144,7 @@ int sht_get_hash(sht_hash_buff hash, sht_pardir_buff* pardir_out)
 
    return 0;
 }
-int sht_determine_sucks()
+int sht_determine_sucks(int* sucks_count_ptr)
 {
    FILE* to_norm_file = fopen(".sht/sucks.sht", "w");
    if (to_norm_file == NULL)
@@ -161,28 +161,61 @@ int sht_determine_sucks()
    for (; ent < file_count; ent++)
    {
       int ent_sucks = 0;
-      for (char* c = files[ent]->d_name; (*c) != '\0'; c++)
+      int i = 0;
+      int dot_i = 0;
+      char* c = files[ent]->d_name;
+      for (; c[i] != '\0'; i++)
       {
-         if (files[ent]->d_type == DT_REG && (*c) == ' ')
+         if (files[ent]->d_type == DT_REG)
          {
-            if (ent_sucks == 0)
+            switch (c[i])
             {
-               int b_printed = fprintf(to_norm_file, "%s'", files[ent]->d_name);
+               case ' ':
+                  if (ent_sucks == 0)
+                  {
+                     fprintf(to_norm_file, "%s'", files[ent]->d_name);
+                     ent_sucks = 1;
+                     sucks_count++;
+                  }
+
+                  c[i] = '_';
+                  break;
+               case '.':
+                  dot_i = i;
+                  break;
+            }
+            if (i > 128 && ent_sucks == 0)
+            {
+               fprintf(to_norm_file, "%s'", files[ent]->d_name);
                ent_sucks = 1;
                sucks_count++;
             }
-
-            (*c) = '_';
          }
       }
 
       free(files[ent]);
 
       if (ent_sucks)
-         fprintf(to_norm_file, "%s\n", files[ent]->d_name);
+      {
+         if (dot_i > 0)
+         {
+            int extension_s = i - dot_i;
+            int write_truncated_name_s = 128 - extension_s;
+            fwrite(files[ent]->d_name, 1, write_truncated_name_s, to_norm_file);
+            fwrite(&files[ent]->d_name[dot_i], 1, extension_s, to_norm_file);
+         }
+         else
+         {
+            fwrite(files[ent]->d_name, 1, 128, to_norm_file);
+         }
+         fprintf(to_norm_file, "\n");
+      }
    }
    free(files);
    fclose(to_norm_file);
+
+   if (sucks_count_ptr)
+      (*sucks_count_ptr) = sucks_count;
 
    return sucks_count;
 }
@@ -391,7 +424,7 @@ int sht_normalize_files(int force_flag)
 {
    sht_check_complain();
 
-   if (sht_determine_sucks() == -1)
+   if (sht_determine_sucks(0) == -1)
       return -1;
 
    FILE* to_norm_file = fopen(".sht/sucks.sht", "r");
@@ -513,7 +546,8 @@ int main(int argc, const char* argv[])
    {
       sht_check_complain();
 
-      int suck_count = sht_determine_sucks();
+      int suck_count;
+      sht_determine_sucks(&suck_count);
       if (suck_count == -1)
       {
          fprintf(stderr, "Error: failed to determine sucky status for files\n");
