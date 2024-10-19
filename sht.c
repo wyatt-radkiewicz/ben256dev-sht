@@ -593,10 +593,14 @@ STATUS_FREE_BUFFERS:
                   return -1;
                }
 
-               if (mkdir(pardir, 0777))
+               struct stat statbuff;
+               if (stat(pardir, &statbuff))
                {
-                  perror("Error: failed to make object parent directory");
-                  return -1;
+                  if (mkdir(pardir, 0777))
+                  {
+                     perror("Error: failed to make object parent directory");
+                     return -1;
+                  }
                }
 
                wb = snprintf(pardir, 512, ".sht/objects/%.2s/%.62s", hash, hash+2);
@@ -788,13 +792,24 @@ STATUS_FREE_BUFFERS:
             perror("Error: failed to open pardir to check for sibliings");
             goto SHT_WIPE_RET_ERR;
          }
-         if (readdir(dfd))
+
+         int par_dir_is_empty = 1;
+         for (struct dirent* entry; (entry = readdir(dfd)) != NULL; )
+         {
+            if (entry->d_name[0] != '.')
+            {
+               par_dir_is_empty = 0;
+               break;
+            }
+         }
+         closedir(dfd);
+
+         if (par_dir_is_empty)
          {
             if (remove(pardir))
             {
-               fprintf(stderr, "Error: failed to remove object parent directory \"%s\" targeted for wipe: ", pardir);
+               fprintf(stderr, "Warning: failed to remove object parent directory \"%s\" targeted for wipe: ", pardir);
                perror("");
-               goto SHT_WIPE_RET_ERR;
             }
          }
 
