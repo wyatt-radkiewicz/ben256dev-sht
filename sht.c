@@ -781,9 +781,23 @@ STATUS_FREE_BUFFERS:
             goto SHT_WIPE_RET_ERR;
          }
 
-         // if parent directory to wiped file doesn't contain additional files, then we can wipe it aswell
+         pardir[16] = '\0';
+         DIR* dfd = opendir(pardir);
+         if (dfd == NULL)
+         {
+            perror("Error: failed to open pardir to check for sibliings");
+            goto SHT_WIPE_RET_ERR;
+         }
+         if (readdir(dfd))
+         {
+            if (remove(pardir))
+            {
+               fprintf(stderr, "Error: failed to remove object parent directory \"%s\" targeted for wipe: ", pardir);
+               perror("");
+               goto SHT_WIPE_RET_ERR;
+            }
+         }
 
-         //remove file ref
          int wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
          if (wb >= 512)
          {
