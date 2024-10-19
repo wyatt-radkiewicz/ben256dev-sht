@@ -875,7 +875,6 @@ SHT_WIPE_RET_ERR:
       int file_count = scandir(".", &files, &sht_reg_filter, &sht_status_compar);
       
       int ent = 0;
-      int greatest_str_size = 0;
       for (; ent < file_count; ent++)
       {
          int ent_sucks = 0;
@@ -885,12 +884,7 @@ SHT_WIPE_RET_ERR:
             {
                if (ent_sucks == 0)
                {
-                  int b_printed = fprintf(to_norm_file, "%s", files[ent]->d_name);
-                  fprintf(to_norm_file, ": ");
-
-                  if (b_printed > greatest_str_size)
-                     greatest_str_size = b_printed;
-
+                  int b_printed = fprintf(to_norm_file, "%s'", files[ent]->d_name);
                   ent_sucks = 1;
                }
 
@@ -906,56 +900,46 @@ SHT_WIPE_RET_ERR:
       free(files);
       fclose(to_norm_file);
 
-      if (greatest_str_size)
+      to_norm_file = fopen(".sht/to-normalize.sht", "r");
+      if (to_norm_file == NULL)
       {
-         char* filename_buff_alloc = malloc(2 * greatest_str_size);
-         char* filename_buff_old = filename_buff_alloc;
-         char* filename_buff_new = filename_buff_alloc + greatest_str_size;
-         if (filename_buff_alloc == NULL)
-         {
-            fprintf(stderr, "Error: failed to malloc filename buffers\n");
-            return -1;
-         }
-
-         to_norm_file = fopen(".sht/to-normalize.sht", "r");
-         if (to_norm_file == NULL)
-         {
-            perror("Error: failed to open file for verification of what needs normalized");
-            return -1;
-         }
-
-         for (; fgets(filename_buff_old, greatest_str_size, to_norm_file) != NULL; )
-         {
-            printf("Normalize file '%s' to ", filename_buff_old);
-            if (fgets(filename_buff_new, greatest_str_size, to_norm_file) == NULL)
-            {
-               fprintf(stderr, "Error: expected normalized filename but read NULL instead\n");
-               return -1;
-            }
-            printf("%s?\n", filename_buff_new);
-            printf("   [Y/n]: ");
-            int v = fgetc(stdin);
-            printf("\n");
-            if (v != 'y' || v != 'Y')
-            {
-               if (1)//rename(filename_buff_old, filename_buff_new))
-               {
-                  fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", filename_buff_old, filename_buff_new);
-                  perror("   ");
-                  goto NORMALIZE_RET_ERROR;
-               }
-            }
-         }
-
-         free(filename_buff_alloc);
-         return 0;
-
-NORMALIZE_RET_ERROR:
-         free(filename_buff_alloc);
+         perror("Error: failed to open file for verification of what needs normalized");
          return -1;
       }
 
+      char* line_buff;
+      size_t line_len = 0;
+      for (ssize_t nread; (nread = getline(&line_buff, &line_len, to_norm_file)) != -1; )
+      {
+         char* line_buff_delim_byte = strrchr(line_buff, '\'');
+         if (line_buff_delim_byte == NULL)
+         {
+            fprintf(stderr, "Error: could not read filename to be normalized from file\n");
+            return -1;
+         }
+         (*line_buff_delim_byte) = '\0';
 
+         printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
+         printf("   [Y/n]: ");
+         int v = fgetc(stdin);
+         printf("\n");
+         if (v != 'y' || v != 'Y')
+         {
+            if (1)//rename(filename_buff_old, filename_buff_new))
+            {
+               fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
+               perror("   ");
+               goto NORMALIZE_RET_ERROR;
+            }
+         }
+      }
+
+      free(line_buff);
+      return 0;
+
+NORMALIZE_RET_ERROR:
+      free(line_buff);
+      return -1;
    }
    else
    {
