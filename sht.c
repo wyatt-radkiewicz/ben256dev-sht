@@ -915,16 +915,22 @@ SHT_WIPE_RET_ERR:
          if (line_buff_delim_byte == NULL)
          {
             fprintf(stderr, "Error: could not read filename to be normalized from file\n");
-            return -1;
+            goto NORMALIZE_RET_ERROR;
          }
+
          (*line_buff_delim_byte) = '\0';
+         line_buff[nread - 1] = '\0';
 
          printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
          printf("   [Y/n]: ");
-         int v = fgetc(stdin);
-         fflush(stdin);
-         printf("\n");
-         if (v != 'y' || v != 'Y')
+         char v[4];
+         if (fgets(v, 4, stdin) == NULL)
+         {
+            fprintf(stderr, "Error: failed to read validation from user\n");
+            goto NORMALIZE_RET_ERROR;
+         }
+
+         if (v[0] == 'y' || v[0] == 'Y')
          {
             if (rename(line_buff, line_buff_delim_byte + 1))
             {
