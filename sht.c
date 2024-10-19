@@ -922,10 +922,11 @@ SHT_WIPE_RET_ERR:
          printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
          printf("   [Y/n]: ");
          int v = fgetc(stdin);
+         fflush(stdin);
          printf("\n");
          if (v != 'y' || v != 'Y')
          {
-            if (1)//rename(filename_buff_old, filename_buff_new))
+            if (rename(line_buff, line_buff_delim_byte + 1))
             {
                fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
                perror("   ");
