@@ -144,6 +144,48 @@ int sht_get_hash(sht_hash_buff hash, sht_pardir_buff* pardir_out)
 
    return 0;
 }
+int sht_determine_sucks()
+{
+   FILE* to_norm_file = fopen(".sht/sucks.sht", "w");
+   if (to_norm_file == NULL)
+   {
+      perror("Error: failed to open sucks file");
+      return -1;
+   }
+
+   struct dirent** files;
+   int file_count = scandir(".", &files, &sht_reg_filter, &sht_status_compar);
+   
+   int sucks_count = 0;
+   int ent = 0;
+   for (; ent < file_count; ent++)
+   {
+      int ent_sucks = 0;
+      for (char* c = files[ent]->d_name; (*c) != '\0'; c++)
+      {
+         if (files[ent]->d_type == DT_REG && (*c) == ' ')
+         {
+            if (ent_sucks == 0)
+            {
+               int b_printed = fprintf(to_norm_file, "%s'", files[ent]->d_name);
+               ent_sucks = 1;
+               sucks_count++;
+            }
+
+            (*c) = '_';
+         }
+      }
+
+      free(files[ent]);
+
+      if (ent_sucks)
+         fprintf(to_norm_file, "%s\n", files[ent]->d_name);
+   }
+   free(files);
+   fclose(to_norm_file);
+
+   return sucks_count;
+}
 FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr)
 {
    int dir_count = 0;
@@ -345,6 +387,71 @@ SHT_CHECK_RET_ERROR:
    return -1;
 }
 
+int sht_normalize_files(int force_flag)
+{
+   sht_check_complain();
+
+   if (sht_determine_sucks() == -1)
+      return -1;
+
+   FILE* to_norm_file = fopen(".sht/sucks.sht", "r");
+   if (to_norm_file == NULL)
+   {
+      perror("Error: failed to open file for verification of what needs normalized");
+      return -1;
+   }
+
+   char* line_buff;
+   size_t line_len = 0;
+   for (ssize_t nread; (nread = getline(&line_buff, &line_len, to_norm_file)) != -1; )
+   {
+      int force_ent = force_flag;
+
+      char* line_buff_delim_byte = strrchr(line_buff, '\'');
+      if (line_buff_delim_byte == NULL)
+      {
+         fprintf(stderr, "Error: could not read filename to be normalized from file\n");
+         goto NORMALIZE_RET_ERROR;
+      }
+
+      (*line_buff_delim_byte) = '\0';
+      line_buff[nread - 1] = '\0';
+
+      if (force_flag == 0)
+      {
+         printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
+         printf("   [a | Y/n]: ");
+         char v[4];
+         if (fgets(v, 4, stdin) == NULL)
+         {
+            fprintf(stderr, "Error: failed to read validation from user\n");
+            goto NORMALIZE_RET_ERROR;
+         }
+         if (v[0] == 'y' || v[0] == 'Y')
+            force_ent = 1;
+         if (v[0] == 'a' || v[0] == 'A')
+            force_ent = force_flag = 1;
+      }
+
+      if (force_flag || force_ent)
+      {
+         if (rename(line_buff, line_buff_delim_byte + 1))
+         {
+            fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
+            perror("   ");
+            goto NORMALIZE_RET_ERROR;
+         }
+      }
+   }
+
+   free(line_buff);
+   return 0;
+
+NORMALIZE_RET_ERROR:
+   free(line_buff);
+   return -1;
+}
+
 int main(int argc, const char* argv[])
 { 
    if (argc < 2)
@@ -405,6 +512,21 @@ int main(int argc, const char* argv[])
    else if (strcmp(argv[1], "status") == 0)
    {
       sht_check_complain();
+
+      int suck_count = sht_determine_sucks();
+      if (suck_count == -1)
+      {
+         fprintf(stderr, "Error: failed to determine sucky status for files\n");
+         return -1;
+      }
+
+      if (suck_count)
+      {
+         printf("%d of your filenames suck. Refusing to perform \"%s status\"\n", suck_count, argv[0]);
+         printf("  (NOTE: run \"%s normalize-files\" to automatically rename files one-by-one)\n", argv[0]);
+         printf("  (NOTE: run \"%s normalize-files --force\" to force rename all)\n", argv[0]);
+         return 0;
+      }
 
       int dir_count;
       int reg_count;
@@ -862,91 +984,21 @@ SHT_WIPE_RET_ERR:
    }
    else if (strcmp(argv[1], "normalize-files") == 0)
    {
-      sht_check_complain();
-
-      FILE* to_norm_file = fopen(".sht/to-normalize.sht", "w");
-      if (to_norm_file == NULL)
+      int force_flag = 0;
+      if (argc > 2)
       {
-         perror("Error: failed to open file for writing what needs normalized");
-         return -1;
-      }
-
-      struct dirent** files;
-      int file_count = scandir(".", &files, &sht_reg_filter, &sht_status_compar);
-      
-      int ent = 0;
-      for (; ent < file_count; ent++)
-      {
-         int ent_sucks = 0;
-         for (char* c = files[ent]->d_name; (*c) != '\0'; c++)
+         for (int i = 2; i < argc; i++)
          {
-            if (files[ent]->d_type == DT_REG && (*c) == ' ')
+            if (strcmp(argv[2], "-f") == 0 || strcmp(argv[2], "--force") == 0)
             {
-               if (ent_sucks == 0)
-               {
-                  int b_printed = fprintf(to_norm_file, "%s'", files[ent]->d_name);
-                  ent_sucks = 1;
-               }
-
-               (*c) = '_';
-            }
-         }
-
-         free(files[ent]);
-
-         if (ent_sucks)
-            fprintf(to_norm_file, "%s\n", files[ent]->d_name);
-      }
-      free(files);
-      fclose(to_norm_file);
-
-      to_norm_file = fopen(".sht/to-normalize.sht", "r");
-      if (to_norm_file == NULL)
-      {
-         perror("Error: failed to open file for verification of what needs normalized");
-         return -1;
-      }
-
-      char* line_buff;
-      size_t line_len = 0;
-      for (ssize_t nread; (nread = getline(&line_buff, &line_len, to_norm_file)) != -1; )
-      {
-         char* line_buff_delim_byte = strrchr(line_buff, '\'');
-         if (line_buff_delim_byte == NULL)
-         {
-            fprintf(stderr, "Error: could not read filename to be normalized from file\n");
-            goto NORMALIZE_RET_ERROR;
-         }
-
-         (*line_buff_delim_byte) = '\0';
-         line_buff[nread - 1] = '\0';
-
-         printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
-         printf("   [Y/n]: ");
-         char v[4];
-         if (fgets(v, 4, stdin) == NULL)
-         {
-            fprintf(stderr, "Error: failed to read validation from user\n");
-            goto NORMALIZE_RET_ERROR;
-         }
-
-         if (v[0] == 'y' || v[0] == 'Y')
-         {
-            if (rename(line_buff, line_buff_delim_byte + 1))
-            {
-               fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
-               perror("   ");
-               goto NORMALIZE_RET_ERROR;
+               force_flag = 1;
+               break;
             }
          }
       }
 
-      free(line_buff);
-      return 0;
-
-NORMALIZE_RET_ERROR:
-      free(line_buff);
-      return -1;
+      if (sht_normalize_files(force_flag))
+         fprintf(stderr, "Error: Failed to normalize files\n");
    }
    else
    {
