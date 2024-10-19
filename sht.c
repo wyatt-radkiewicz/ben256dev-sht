@@ -62,6 +62,10 @@ int sht_check_complain()
 
    return cl;
 }
+int sht_reg_filter(const struct dirent* ent)
+{
+   return ent->d_type == DT_REG;
+}
 int sht_status_filter(const struct dirent* ent)
 {
    return ent->d_type == DT_REG || ent->d_type == DT_DIR;
@@ -794,7 +798,7 @@ STATUS_FREE_BUFFERS:
          }
 
          int par_dir_is_empty = 1;
-         for (struct dirent* entry; (entry = readdir(dfd)) != NULL; )
+         for (const struct dirent* entry; (entry = readdir(dfd)) != NULL; )
          {
             if (entry->d_name[0] != '.')
             {
@@ -855,5 +859,110 @@ SHT_WIPE_RET_ERR:
       }
       free(args_need_match);
       return -1;
+   }
+   else if (strcmp(argv[1], "normalize-files") == 0)
+   {
+      sht_check_complain();
+
+      FILE* to_norm_file = fopen(".sht/to-normalize.sht", "w");
+      if (to_norm_file == NULL)
+      {
+         perror("Error: failed to open file for writing what needs normalized");
+         return -1;
+      }
+
+      struct dirent** files;
+      int file_count = scandir(".", &files, &sht_reg_filter, &sht_status_compar);
+      
+      int ent = 0;
+      int greatest_str_size = 0;
+      for (; ent < file_count; ent++)
+      {
+         int ent_sucks = 0;
+         for (char* c = files[ent]->d_name; (*c) != '\0'; c++)
+         {
+            if (files[ent]->d_type == DT_REG && (*c) == ' ')
+            {
+               if (ent_sucks == 0)
+               {
+                  int b_printed = fprintf(to_norm_file, "%s", files[ent]->d_name);
+                  fprintf(to_norm_file, ": ");
+
+                  if (b_printed > greatest_str_size)
+                     greatest_str_size = b_printed;
+
+                  ent_sucks = 1;
+               }
+
+               (*c) = '_';
+            }
+         }
+
+         free(files[ent]);
+
+         if (ent_sucks)
+            fprintf(to_norm_file, "%s\n", files[ent]->d_name);
+      }
+      free(files);
+      fclose(to_norm_file);
+
+      if (greatest_str_size)
+      {
+         char* filename_buff_alloc = malloc(2 * greatest_str_size);
+         char* filename_buff_old = filename_buff_alloc;
+         char* filename_buff_new = filename_buff_alloc + greatest_str_size;
+         if (filename_buff_alloc == NULL)
+         {
+            fprintf(stderr, "Error: failed to malloc filename buffers\n");
+            return -1;
+         }
+
+         to_norm_file = fopen(".sht/to-normalize.sht", "r");
+         if (to_norm_file == NULL)
+         {
+            perror("Error: failed to open file for verification of what needs normalized");
+            return -1;
+         }
+
+         for (; fgets(filename_buff_old, greatest_str_size, to_norm_file) != NULL; )
+         {
+            printf("Normalize file '%s' to ", filename_buff_old);
+            if (fgets(filename_buff_new, greatest_str_size, to_norm_file) == NULL)
+            {
+               fprintf(stderr, "Error: expected normalized filename but read NULL instead\n");
+               return -1;
+            }
+            printf("%s?\n", filename_buff_new);
+            printf("   [Y/n]: ");
+            int v = fgetc(stdin);
+            printf("\n");
+            if (v != 'y' || v != 'Y')
+            {
+               if (1)//rename(filename_buff_old, filename_buff_new))
+               {
+                  fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", filename_buff_old, filename_buff_new);
+                  perror("   ");
+                  goto NORMALIZE_RET_ERROR;
+               }
+            }
+         }
+
+         free(filename_buff_alloc);
+         return 0;
+
+NORMALIZE_RET_ERROR:
+         free(filename_buff_alloc);
+         return -1;
+      }
+
+
+   }
+   else
+   {
+      printf("%s: unrecognized command \"%s\"\n", argv[0], argv[1]);
+      printf("   Try running \"%s\" -h for help\n", argv[0]);
+      printf("   JK it doesn't exist yet\n");
+
+      return 0;
    }
 }
