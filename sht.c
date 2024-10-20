@@ -1175,7 +1175,7 @@ SHT_WIPE_RET_ERR:
                      fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
                      return -1;
                   }
-                  return 0;
+                  continue;
                case '-':
                   if (i == 0)
                   {
