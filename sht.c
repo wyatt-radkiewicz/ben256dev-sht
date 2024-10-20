@@ -68,7 +68,7 @@ int sht_reg_filter(const struct dirent* ent)
 }
 int sht_status_filter(const struct dirent* ent)
 {
-   return ent->d_type == DT_REG || ent->d_type == DT_DIR;
+   return ent->d_type == DT_REG || ent->d_type == DT_DIR && strcmp(ent->d_name, ".") && strcmp(ent->d_name, "..");
 }
 int sht_status_compar(const struct dirent** a, const struct dirent** b)
 {
@@ -219,7 +219,52 @@ int sht_determine_sucks(int* sucks_count_ptr)
 
    return sucks_count;
 }
-FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr)
+
+#define SHT_DETERMINE_OBJECTS_API_NOTIFY 1
+int sht_determine_objects_recursive(const char* dir_path_rec)
+{
+   int reg_count = 0;
+
+   struct dirent** files;
+   int file_count = scandir(dir_path_rec, &files, &sht_status_filter, &sht_status_compar);
+
+   int ent = 0;
+   for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
+   {
+      int rc = sht_determine_objects_recursive(files[ent]->d_name);
+      if (rc == -1)
+         return -1;
+      reg_count += rc;
+      free(files[ent]);
+   }
+   for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
+   {
+      size_t command_n = strlen(files[ent]->d_name) + 7;
+      char* command_s = malloc(command_n);
+      if (command_s == NULL)
+         exit(EXIT_FAILURE);
+
+      int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
+      if (wb >= command_n)
+      {
+         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+         return -1;
+      }
+      int rv = system(command_s);
+      if (rv == -1)
+         perror("b3sum sys call failed");
+
+      free(files[ent]);
+
+      reg_count++;
+   }
+
+   free(files);
+
+   return reg_count;
+}
+
+FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag)
 {
    int dir_count = 0;
    int reg_count = 0;
@@ -231,16 +276,16 @@ FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr)
    struct dirent** files;
    int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
 
-   if (files[0]->d_type == DT_DIR)
+   int ent = 0;
+   if (files[0]->d_type == DT_DIR && opt_flag & SHT_DETERMINE_OBJECTS_API_NOTIFY)
    {
       fprintf(status_directories_file, "Untracked Directories:\n");
-      fprintf(status_directories_file, "  (NOTE: sht doesn't support nesting of files)\n");
+      fprintf(status_directories_file, "  (NOTE: sht does not maintain a tree structure for directories)\n");
+      fprintf(status_directories_file, "  (NOTE: use \"--recursive\" to track contents of directories recursively)\n");
    }
-
-   int ent = 0;
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      fprintf(status_directories_file, "    /%s\n", files[ent]->d_name);
+      fprintf(status_directories_file, "    %s/\n", files[ent]->d_name);
       free(files[ent]);
       dir_count++;
    }
@@ -299,14 +344,9 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
    sht_ref_buff    ref;
    sht_hash_buff   hash;
 
-   /*
-      fprintf(stderr, "unsupported flag \"%s\"\n", argv[3]);
-      goto SHT_CHECK_RET_ERROR;
-   */
-
    if (strcmp("--status", argv[3]) == 0)
    {
-      FILE* rv = sht_determine_objects(0, 0);
+      FILE* rv = sht_determine_objects(0, 0, 0);
       if (rv == NULL)
       {
          goto SHT_CHECK_RET_ERROR;
@@ -564,7 +604,7 @@ int main(int argc, const char* argv[])
 
       int dir_count;
       int reg_count;
-      FILE* rv = sht_determine_objects(&dir_count, &reg_count);
+      FILE* rv = sht_determine_objects(&dir_count, &reg_count, SHT_DETERMINE_OBJECTS_API_NOTIFY);
       if (rv == NULL)
       {
          return -1;
@@ -687,7 +727,7 @@ STATUS_FREE_BUFFERS:
          printf("  try running \"%s store [FILE] ...\" to track files\n", argv[0]);
       }
 
-      FILE* rv = sht_determine_objects(0, 0);
+      FILE* rv = sht_determine_objects(0, 0, 0);
       if (rv == NULL)
       {
          return -1;
@@ -876,7 +916,7 @@ STATUS_FREE_BUFFERS:
          printf("  try running \"%s wipe [FILE] ...\" to erase files\n", argv[0]);
       }
 
-      FILE* rv = sht_determine_objects(0, 0);
+      FILE* rv = sht_determine_objects(0, 0, 0);
       if (rv == NULL)
       {
          return -1;
