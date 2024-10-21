@@ -26,7 +26,7 @@ Not a sht repository
   (run "sht init" to initialize repository)
 ```
 
-No ``.sht`` directory was found. This should be a hidden directory prefixed with a '.'. Lets create it and check it's contents with ``tree``.
+No ``.sht`` directory was found. This should be a hidden directory prefixed with a ``.``. Lets create it and check it's contents with ``tree``.
 
 ```bash
 $ sht init
@@ -91,7 +91,7 @@ $ tree .sht
 4 directories, 8 files
 ```
 
-Now we see the result of ``sht store`` reflected in the directory structure and sht status. The ``94`` directory under ``objects`` is the first two bytes of a hash. The remaining 62 bytes are the name to a file in the 94 ``94`` directory.
+Now we see the result of ``sht store`` reflected in the directory structure and sht status. The ``94`` directory under ``objects`` is the first two bytes of a hash. The remaining 62 bytes are the name to a file in the ``94`` directory.
 
 The ``refs`` directory also contains a new file ``sht``. In the ``tags`` branch, this directory has been renamed to ``tags`` and instead of simply storing the filename we would see ``filename:sht``. The current state of ``main`` makes this part confusing. We can run some commands to make it clear what is going on.
 
