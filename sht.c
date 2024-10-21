@@ -87,6 +87,56 @@ int sht_parse_error(const char* parsed, int i, const char* i_name, const char* f
 
    return 0;
 }
+int sht_parse_tag(const char* arg, const char** keyword_ptr)
+{
+   if (arg == NULL)
+   {
+      fprintf(stderr, "Error: must specify arg to parse tag\n");
+      return -1;
+   }
+   if (keyword_ptr == NULL)
+   {
+      fprintf(stderr, "Error: must specify keyword ptr\n");
+      return -1;
+   }
+
+   for (int i = 0; arg[i] != '\0'; i++)
+   {
+      char c = (isdigit(arg[i]) || islower(arg[i])) ? 'a' : arg[i];
+      switch (c)
+      {
+         case 'a':
+            break;
+         case ':':
+            if (strncmp("filename:", arg, i) == 0)
+               (*keyword_ptr) = arg + i + 1;
+            else if (sht_parse_error(arg, i, "i", "\"%k\" is not a valid keyword\n", arg, i) != 1)
+            {
+               fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+               return -1;
+            }
+            continue;
+         case '-':
+            if (i == 0)
+            {
+               if (sht_parse_error(arg, i, "i", "Note: tag name must not contain leading '-'\n", 0, 0) != 1)
+               {
+                  fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+                  return -1;
+               }
+               return 0;
+            }
+            break;
+         default:
+            if (sht_parse_error(arg, i, "i","Note: tag name must only contain lowercase alphanumeric or '-'\n", 0, 0) != 1)
+            {
+               fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+               return -1;
+            }
+            return 0;
+      }
+   }
+}
 int sht_check_tree()
 {
    if (access(".sht", F_OK))
@@ -1159,43 +1209,7 @@ SHT_WIPE_RET_ERR:
       const char* filename_tag;
       for (int arg_i = 2; arg_i < argc; arg_i++)
       {
-         const char* arg = argv[arg_i];
-         for (int i = 0; arg[i] != '\0'; i++)
-         {
-            char c = (isdigit(arg[i]) || islower(arg[i])) ? 'a' : arg[i];
-            switch (c)
-            {
-               case 'a':
-                  break;
-               case ':':
-                  if (strncmp("filename:", arg, i) == 0)
-                     filename_tag = arg + i + 1;
-                  else if (sht_parse_error(arg, i, "i", "\"%k\" is not a valid keyword\n", arg, i) != 1)
-                  {
-                     fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
-                     return -1;
-                  }
-                  continue;
-               case '-':
-                  if (i == 0)
-                  {
-                     if (sht_parse_error(arg, i, "i", "Note: tag name must not contain leading '-'\n", 0, 0) != 1)
-                     {
-                        fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
-                        return -1;
-                     }
-                     return 0;
-                  }
-                  break;
-               default:
-                  if (sht_parse_error(arg, i, "i","Note: tag name must only contain lowercase alphanumeric or '-'\n", 0, 0) != 1)
-                  {
-                     fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
-                     return -1;
-                  }
-                  return 0;
-            }
-         }
+         sht_parse_tag(argv[arg_i], &filename_tag);
       }
       if (filename_tag)
          printf("Filename specified as \"%s\"\n", filename_tag);
