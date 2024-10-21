@@ -34,30 +34,29 @@ int sht_check_tree()
 }
 int sht_check_complain()
 {
-   int cl;
-   if ((cl = sht_check_tree()))
+   int cl = sht_check_tree();
+   switch (cl)
    {
-      switch (cl)
-      {
-         case 1:
-            printf("Not a sht repository\n");
-            printf("  (run \"sht init\" to initialize repository)\n");
-            break;
-         case 2:
-            fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
-            break;
-         case 3:
-            fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
-            break;
-      }
-      switch (cl)
-      {
-         case 2:
-         case 3:
-            printf("  (run \"sht init\" to fix these files)\n");
-      }
-
-      return 0;
+      case 1:
+         printf("Not a sht repository\n");
+         printf("  (run \"sht init\" to initialize repository)\n");
+         break;
+      case 2:
+         fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
+         break;
+      case 3:
+         fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
+         break;
+      case 0:
+         return 0;
+      default:
+         return -1;
+   }
+   switch (cl)
+   {
+      case 2:
+      case 3:
+         printf("  (run \"sht init\" to fix these files)\n");
    }
 
    return cl;
@@ -584,7 +583,8 @@ int main(int argc, const char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      sht_check_complain();
+      if (sht_check_complain())
+         return 0;
 
       int suck_count;
       sht_determine_sucks(&suck_count);
