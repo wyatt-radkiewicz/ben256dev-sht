@@ -98,7 +98,7 @@ The ``refs`` directory also contains a new file ``sht``. In the ``tags`` branch,
 ```bash
 $ cat .sht/refs/sht
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
-$ diff .sht/objects/94/e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94 sht
+$ diff .sht/objects/94/e6d16* sht
 $ echo $?
 0
 ```
