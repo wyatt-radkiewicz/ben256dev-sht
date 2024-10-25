@@ -43,6 +43,14 @@ I stole the directory structure from .git. To demonstrate how it works, lets tra
 
 ```bash
 $ sht status
+sh: b3sum: command not found
+...
+```
+
+If you get the above output, then you need to install the b3sum utility. Maybe either via cargo or homebrew.
+
+```bash
+$ sht status
 Untracked Directories:
   (NOTE: sht does not maintain a tree structure for directories)
   (NOTE: use "--recursive" to track contents of directories recursively)
@@ -56,7 +64,6 @@ Untracked Files:
   .gitignore
 $ sht store sht
 ```
-
 Now sht tracks its own ``sht`` executable. We can check that this was successful in two ways, with ``tree .sht`` or ``sht status``.
 
 ```bash
@@ -201,5 +208,5 @@ When wiping a "ref" sht assumes that it correctly maps onto an existing object. 
 - sht could use a fully-commented header for the sake of providing a well documented interface.
 - sht has no helpful usage message.
 - sht has no shell-based argument autocompletion.
-- sht isn't portable and doesn't work on anything other than Linux.
+- sht may only work for Linux and Mac.
 - There's probably something you can come up that needs improved. If so, please make changes.
