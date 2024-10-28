@@ -21,17 +21,11 @@ void sht_print_usage()
 int sht_check_tree()
 {
    if (access(".sht", F_OK))
-   {
       return 1;
-   }
    if (access(".sht/objects", F_OK))
-   {
       return 2;
-   }
    if (access(".sht/refs", F_OK))
-   {
       return 3;
-   }
 
    return 0;
 }
@@ -252,6 +246,8 @@ int sht_hash(const char* filename)
    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++)
       printf("%02x", output[i]);
    printf("\n");
+
+   return 0;
 }
 #define SHT_DETERMINE_OBJECTS_API_NOTIFY 1
 int sht_determine_objects_recursive(const char* dir_path_rec)
@@ -355,15 +351,25 @@ DETERMINE_OBJECTS_TRY_IMP:
          int rv = system(command_s);
          fflush(status_file);
          if (rv == -1)
+         {
+            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
+            freopen("/dev/tty", "w", stdout);
             perror("b3sum sys call failed");
+         }
          else if (rv && use_c_blake_imp == 0)
          {
+            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
+            freopen("/dev/tty", "w", stdout);
             fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
             use_c_blake_imp = 1;
 	    goto DETERMINE_OBJECTS_TRY_IMP;
          }
-         else
-            exit(EXIT_FAILURE);
+         //else
+         //   exit(EXIT_FAILURE);
       }
 
       free(files[ent]);
@@ -1135,13 +1141,11 @@ SHT_WIPE_RET_ERR:
       if (argc < 3)
       {
          printf("No files specified for \"%s hash\"\n", argv[0]);
-	 return 0;
+         return 0;
       }
 
       for (int i = 2; i < argc; i++)
-      {
          sht_hash(argv[i]);
-      }
 
       return 0;
    }
