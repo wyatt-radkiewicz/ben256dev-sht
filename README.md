@@ -8,7 +8,7 @@ cd sht
 git checkout -b <your new branch name here>
 uname -u
 # make some changes
-# git push origin <your new branch name here>
+git push origin <your new branch name here>
 ```
 
 For non-collaborators, fork the repo and make a pull request from there. You can also ask for an invite.
