@@ -18,20 +18,11 @@ Once you make your pull request, you can yell at me or call me or whatever you h
 ## build
 
 ```bash
-$ uname -m # shows your architecture
-x86_64
-$ make build-
-build-arm  build-x86  
-$ make build-x86 # in my case its x86 but there is also a target for arm
+$ make build
+$ make
 ```
 
 ## using the utility
-
-Make it easier to run:
-
-```bash
-$ export PATH=$PATH:$(pwd)
-```
 
 Try checking the status:
 ```bash
@@ -173,16 +164,6 @@ As you can see, the duplicate file is still "tracked" by sht. But since we only 
 $ cat .sht/refs/sh*t
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
-```
-
-## Autocomplete
-
-To enable autocompletion, run the following command in the base directory
-
-```bash
-$ echo "source $(pwd)/sht_complete.sh" >> ~/.bashrc
-# Don't forget to re-source your .bashrc also
-$ source ~/.bashrc
 ```
 
 ## How to contribute
