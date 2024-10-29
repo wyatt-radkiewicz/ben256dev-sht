@@ -57,6 +57,14 @@ I stole the directory structure from .git. To demonstrate how it works, lets tra
 
 ```bash
 $ sht status
+sh: b3sum: command not found
+...
+```
+
+If you get the above output, then you need to install the b3sum utility. Maybe either via cargo or homebrew.
+
+```bash
+$ sht status
 Untracked Directories:
   (NOTE: sht does not maintain a tree structure for directories)
   (NOTE: use "--recursive" to track contents of directories recursively)
@@ -70,7 +78,6 @@ Untracked Files:
   .gitignore
 $ sht store sht
 ```
-
 Now sht tracks its own ``sht`` executable. We can check that this was successful in two ways, with ``tree .sht`` or ``sht status``.
 
 ```bash
@@ -112,7 +119,7 @@ The ``refs`` directory also contains a new file ``sht``. In the ``tags`` branch,
 ```bash
 $ cat .sht/refs/sht
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
-$ diff .sht/objects/94/e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94 sht
+$ diff .sht/objects/94/e6d16* sht
 $ echo $?
 0
 ```
@@ -168,6 +175,16 @@ $ cat .sht/refs/sh*t
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
 ```
 
+## Autocomplete
+
+To enable autocompletion, run the following command in the base directory
+
+```bash
+$ echo "source $(pwd)/sht_complete.sh" >> ~/.bashrc
+# Don't forget to re-source your .bashrc also
+$ source ~/.bashrc
+```
+
 ## How to contribute
 
 Here's a bug I ran into while writing this readme:
@@ -214,6 +231,5 @@ When wiping a "ref" sht assumes that it correctly maps onto an existing object. 
 - In the future, we could support branches, trees and commit objects with a directed graph for version control.
 - sht could use a fully-commented header for the sake of providing a well documented interface.
 - sht has no helpful usage message.
-- sht has no shell-based argument autocompletion.
-- sht isn't portable and doesn't work on anything other than Linux.
+- sht may only work for Linux and Mac.
 - There's probably something you can come up that needs improved. If so, please make changes.
