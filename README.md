@@ -162,9 +162,13 @@ $ cat .sht/refs/sh*t
 ```
 
 ## Autocomplete
+
 To enable autocompletion, run the following command in the base directory
+
 ```bash
 $ echo "source $(pwd)/sht_complete.sh" >> ~/.bashrc
+# Don't forget to re-source your .bashrc also
+$ source ~/.bashrc
 ```
 
 ## How to contribute
