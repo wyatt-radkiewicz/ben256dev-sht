@@ -14,9 +14,29 @@ ifeq ($(ARCH), x86_64)
 else ifeq ($(ARCH), aarch64)
 	@$(MAKE) build-b3-arm
 else
-	@echo "Unsupported architecture: $(ARCH)"
-	@exit 1
+	@$(MAKE) build-b3-portable
 endif
+
+# Build BLAKE3 library with portable blake3
+build-b3-portable:
+	@if [ ! -f $(PREFIX)/lib/libblake3.so ]; then \
+		echo "BLAKE3 not found; building BLAKE3 with portable implementation"; \
+		make b3-portable; \
+	else \
+		echo "Using existing BLAKE3 library"; \
+	fi
+
+
+b3-portable: clean-blake3
+	@git clone https://github.com/BLAKE3-team/BLAKE3.git
+	@cd BLAKE3/c && pwd && gcc -O3 -fPIC -shared -o libblake3.so \
+	 blake3.c blake3_dispatch.c blake3_portable.c
+	@sudo cp BLAKE3/c/libblake3.so $(PREFIX)/lib/
+	@sudo cp BLAKE3/c/blake3.h $(PREFIX)/include/
+	@sudo cp BLAKE3/c/blake3_impl.h $(PREFIX)/include/
+	@sudo ldconfig
+	@rm -rvf BLAKE3
+	@echo "BLAKE3 library built with portable implementation"
 
 # Build BLAKE3 library for x86
 build-b3-x86:
@@ -64,7 +84,6 @@ blake3-arm: clean-blake3
 build-sht: 
 	@gcc sht.c -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
 	@sudo cp sht $(PREFIX)/bin/
-	@echo "Sht executable built and installed successfully"
 
 # Install autocompletion
 install-autocompletion:
