@@ -1,14 +1,28 @@
 ## contributing
 
+For collaborators:
+
 ```bash
 git clone git@github.com:ben256dev/sht.git
 cd sht
 git checkout -b <your new branch name here>
-# build sht.c
-gcc sht.c -o sht
-./sht
+uname -u
 # make some changes
 # git push origin <your new branch name here>
+```
+
+For non-collaborators, fork the repo and make a pull request from there. You can also ask for an invite.
+
+Once you make your pull request, you can yell at me or call me or whatever you have to do to get my attention for a merge.
+
+## build
+
+```bash
+$ uname -m # shows your architecture
+x86_64
+$ make build-
+build-arm  build-x86  
+$ make build-x86 # in my case its x86 but there is also a target for arm
 ```
 
 ## using the utility

@@ -1,1 +1,4 @@
 .sht/
+BLAKE3/
+*.so
+sht
