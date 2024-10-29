@@ -1,23 +1,28 @@
 ## contributing
 
+For collaborators:
+
 ```bash
 git clone git@github.com:ben256dev/sht.git
 cd sht
 git checkout -b <your new branch name here>
-# build sht.c
-gcc sht.c -o sht
-./sht
+uname -u
 # make some changes
 # git push origin <your new branch name here>
 ```
 
-## using the utility
+For non-collaborators, fork the repo and make a pull request from there. You can also ask for an invite.
 
-Make it easier to run:
+Once you make your pull request, you can yell at me or call me or whatever you have to do to get my attention for a merge.
+
+## build
 
 ```bash
-$ export PATH=$PATH:$(pwd)
+$ make build
+$ make
 ```
+
+## using the utility
 
 Try checking the status:
 ```bash
@@ -159,12 +164,6 @@ As you can see, the duplicate file is still "tracked" by sht. But since we only 
 $ cat .sht/refs/sh*t
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
-```
-
-## Autocomplete
-To enable autocompletion, run the following command in the base directory
-```bash
-$ echo "source $(pwd)/sht_complete.sh" >> ~/.bashrc
 ```
 
 ## How to contribute
