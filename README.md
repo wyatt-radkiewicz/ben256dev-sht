@@ -18,7 +18,7 @@ Once you make your pull request, you can yell at me or call me or whatever you h
 ## build
 
 ```bash
-$ make build
+$ make install
 $ make
 ```
 

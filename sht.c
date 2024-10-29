@@ -205,27 +205,22 @@ int sht_check_complain()
    int cl = sht_check_tree();
    switch (cl)
    {
-      switch (cl)
-      {
-         case 1:
-            printf("Not a sht repository\n");
-            printf("  (run \"sht init\" to initialize repository)\n");
-            break;
-         case 2:
-            fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
-            break;
-         case 3:
-            fprintf(stderr, "Error: directory \".sht/tags\" not found\n");
-            break;
-      }
-      switch (cl)
-      {
-         case 2:
-         case 3:
-            printf("  (run \"sht init\" to fix these files)\n");
-      }
-
-      return 0;
+      case 1:
+         printf("Not a sht repository\n");
+         printf("  (run \"sht init\" to initialize repository)\n");
+         break;
+      case 2:
+         fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
+         break;
+      case 3:
+         fprintf(stderr, "Error: directory \".sht/tags\" not found\n");
+         break;
+   }
+   switch (cl)
+   {
+      case 2:
+      case 3:
+         printf("  (run \"sht init\" to fix these files)\n");
    }
 
    return cl;

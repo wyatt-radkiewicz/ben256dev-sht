@@ -82,11 +82,16 @@ blake3-arm: clean-blake3
 
 # Compile `sht` executable, assuming BLAKE3 is installed
 build-sht: 
-	@gcc sht.c -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
+	@gcc sht.c -O2 -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
+	@sudo cp sht $(PREFIX)/bin/
+
+# Debug version of 'make'
+debug: 
+	@gcc sht.c -g -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
 	@sudo cp sht $(PREFIX)/bin/
 
 # Install autocompletion
-install-autocompletion:
+autocomp:
 	@echo "Attempting to install sht autocompletion..."
 	@if [ -d "/etc/bash_completion.d" ]; then \
 		sudo cp sht_complete.sh /etc/bash_completion.d/sht; \
@@ -94,10 +99,10 @@ install-autocompletion:
 		mkdir -p $$HOME/.local/share/bash-completion/completions && \
 		cp sht_complete.sh $$HOME/.local/share/bash-completion/completions/sht; \
 	fi
-	@echo "Autocompletion installed successfully."
+	@echo "You may now \"source ~/.bashrc\" to make autocompletions accessible"
 
 # Full install with dependencies and autocompletion
-install: build install-autocompletion
+install: build autocomp
 	@echo "Installation complete"
 
 clean: clean-blake3
