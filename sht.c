@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdint.h>
+
+#include <blake3.h>
 
 typedef char sht_pardir_buff   [512];
 typedef char sht_tag_buff      [128];
@@ -189,24 +192,18 @@ int sht_parse_tag(const char* arg, const char** keyword_ptr)
 int sht_check_tree()
 {
    if (access(".sht", F_OK))
-   {
       return 1;
-   }
    if (access(".sht/objects", F_OK))
-   {
       return 2;
-   }
    if (access(".sht/tags", F_OK))
-   {
       return 3;
-   }
 
    return 0;
 }
 int sht_check_complain()
 {
-   int cl;
-   if ((cl = sht_check_tree()))
+   int cl = sht_check_tree();
+   switch (cl)
    {
       switch (cl)
       {
@@ -391,6 +388,39 @@ int sht_determine_sucks(int* sucks_count_ptr)
    return sucks_count;
 }
 
+int sht_hash(const char* filename)
+{
+   struct stat statbuff;
+   if (stat(filename, &statbuff))
+   {
+      perror("Error: failed to stat file for hashing");
+      return -1;
+   }
+
+   FILE* fp = fopen(filename, "r");
+   if (fp == NULL)
+   {
+      perror("Error: failed to open file for hashing");
+      return -1;
+   }
+
+   blake3_hasher hasher;
+   blake3_hasher_init(&hasher);
+
+   uint8_t* buff = malloc(statbuff.st_size);
+   fread(buff, 1, statbuff.st_size, fp);
+
+   blake3_hasher_update(&hasher, buff, statbuff.st_size);
+
+   uint8_t output[BLAKE3_OUT_LEN];
+   blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
+
+   for (size_t i = 0; i < BLAKE3_OUT_LEN; i++)
+      printf("%02x", output[i]);
+   printf("\n");
+
+   return 0;
+}
 #define SHT_DETERMINE_OBJECTS_API_NOTIFY 1
 int sht_determine_objects_recursive(const char* dir_path_rec)
 {
@@ -461,26 +491,58 @@ FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag
       dir_count++;
    }
 
-   const FILE* status_file = freopen(".sht/status.sht", "w", stdout);
+   FILE* status_file = freopen(".sht/status.sht", "w", stdout);
    if (status_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
 
+   int use_c_blake_imp = 0;
    for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
-      size_t command_n = strlen(files[ent]->d_name) + 7;
-      char* command_s = malloc(command_n);
-      if (command_s == NULL)
-         exit(EXIT_FAILURE);
-
-      int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
-      if (wb >= command_n)
+DETERMINE_OBJECTS_TRY_IMP:
+      if (use_c_blake_imp)
       {
-         fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-         return NULL;
+         if (sht_hash(files[ent]->d_name))
+	 {
+            fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
+	    exit(EXIT_FAILURE);
+	 }
       }
-      int rv = system(command_s);
-      if (rv == -1)
-         perror("b3sum sys call failed");
+      else
+      {
+         size_t command_n = strlen(files[ent]->d_name) + 7;
+         char* command_s = malloc(command_n);
+         if (command_s == NULL)
+            exit(EXIT_FAILURE);
+
+         int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
+         if (wb >= command_n)
+         {
+            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+            return NULL;
+         }
+         int rv = system(command_s);
+         fflush(status_file);
+         if (rv == -1)
+         {
+            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
+            freopen("/dev/tty", "w", stdout);
+            perror("b3sum sys call failed");
+         }
+         else if (rv && use_c_blake_imp == 0)
+         {
+            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
+            freopen("/dev/tty", "w", stdout);
+            fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
+            use_c_blake_imp = 1;
+	    goto DETERMINE_OBJECTS_TRY_IMP;
+         }
+         //else
+         //   exit(EXIT_FAILURE);
+      }
 
       free(files[ent]);
 
@@ -755,7 +817,8 @@ int main(int argc, const char* argv[])
    }
    else if (strcmp(argv[1], "status") == 0)
    {
-      sht_check_complain();
+      if (sht_check_complain())
+         return 0;
 
       int suck_count;
       sht_determine_sucks(&suck_count);
@@ -1262,6 +1325,19 @@ SHT_WIPE_RET_ERR:
       }
       if (filename_tag)
          printf("Filename specified as \"%s\"\n", filename_tag);
+   }
+   else if (strcmp(argv[1], "hash") == 0)
+   {
+      if (argc < 3)
+      {
+         printf("No files specified for \"%s hash\"\n", argv[0]);
+         return 0;
+      }
+
+      for (int i = 2; i < argc; i++)
+         sht_hash(argv[i]);
+
+      return 0;
    }
    else
    {
