@@ -6,7 +6,6 @@ For collaborators:
 git clone git@github.com:ben256dev/sht.git
 cd sht
 git checkout -b <your new branch name here>
-uname -u
 # make some changes
 git push origin <your new branch name here>
 ```
