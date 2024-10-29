@@ -161,6 +161,12 @@ $ cat .sht/refs/sh*t
 94e6d169f481b2c07db644d8a675ebf4b7e02b72bdb88e5b6c1180f5e7c7cb94
 ```
 
+## Autocomplete
+To enable autocompletion, run the following command in the base directory
+```bash
+$ echo "source $(pwd)/sht_complete.sh" >> ~/.bashrc
+```
+
 ## How to contribute
 
 Here's a bug I ran into while writing this readme:
@@ -207,6 +213,5 @@ When wiping a "ref" sht assumes that it correctly maps onto an existing object. 
 - In the future, we could support branches, trees and commit objects with a directed graph for version control.
 - sht could use a fully-commented header for the sake of providing a well documented interface.
 - sht has no helpful usage message.
-- sht has no shell-based argument autocompletion.
 - sht may only work for Linux and Mac.
 - There's probably something you can come up that needs improved. If so, please make changes.
