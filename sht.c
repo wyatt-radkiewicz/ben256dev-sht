@@ -721,7 +721,7 @@ int sht_normalize_files(int force_flag)
       if (force_flag == 0)
       {
          printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
-         printf("   [a | Y/n]: ");
+         printf("   [a | Y/n | q]: ");
          char v[4];
          if (fgets(v, 4, stdin) == NULL)
          {
@@ -732,6 +732,8 @@ int sht_normalize_files(int force_flag)
             force_ent = 1;
          if (v[0] == 'a' || v[0] == 'A')
             force_ent = force_flag = 1;
+         if (v[0] == 'q' || v[0] == 'Q')
+            exit(EXIT_SUCCESS);
       }
 
       if (force_flag || force_ent)
