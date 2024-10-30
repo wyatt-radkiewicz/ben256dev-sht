@@ -9,25 +9,13 @@ _mycontext_complete() {
       status)
          COMPREPLY=($(compgen -W "--recursive" -- "${COMP_WORDS[2]}"))
          ;;
-      store) 
-         # TODO
-         COMPREPLY=($(compgen -W "$(ls)" -- "${COMP_WORDS[2]}"))
+      store|check|check-tree|wipe|normalize-files)
+         # Use globbing to list files instead of calling `ls`
+         COMPREPLY=($(compgen -W "$(echo *)" -- "${COMP_WORDS[2]}"))
          ;;
-      check)
-         COMPREPLY=($(compgen -W "$(ls)" -- "${COMP_WORDS[2]}"))
-         ;;
-      check-tree)
-         COMPREPLY=($(compgen -W "$(ls)" -- "${COMP_WORDS[2]}"))
-         ;;
-      wipe)
-         COMPREPLY=($(compgen -W "$(ls)" -- "${COMP_WORDS[2]}"))
-         ;;
-      normalize-files)
-         COMPREPLY=($(compgen -W "$(ls)" -- "${COMP_WORDS[2]}"))
-         ;;
+      # TODO "sht tag<tab>" gives "sht foo-tag " instead of "sht tag "
       tag )
-         compopt -o nospace  # Prevents the trailing space after "filename:"
-         COMPREPLY=($(compgen -W "filename:" -- "${COMP_WORDS[2]}"))
+         COMPREPLY=($(compgen -W "$(ls .sht/tags 2>/dev/null)" -- "${COMP_WORDS[2]}"))
          ;;
       hash)
          COMPREPLY=($(compgen -W "-f --force" -- "${COMP_WORDS[2]}"))
