@@ -87,7 +87,7 @@ build-sht:
 
 # Debug version of 'make'
 debug: 
-	@gcc sht.c -g -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
+	@gcc sht.c -g -O0 -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
 	@sudo cp sht $(PREFIX)/bin/
 
 # Install autocompletion

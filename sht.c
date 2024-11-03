@@ -402,14 +402,25 @@ int sht_hash(const char* filename)
    blake3_hasher hasher;
    blake3_hasher_init(&hasher);
 
-   uint8_t* buff = malloc(statbuff.st_size);
-   int wb = fread(buff, 1, statbuff.st_size, fp);
-   if (wb != statbuff.st_size)
+   uint8_t* buff = malloc(65536);
+   if (buff == NULL)
    {
-      fprintf(stderr, "Error: failed to read expected bytes for hashing stat'd file\n");
+      perror("Error: failed to allocate chunk buffer");
+      fclose(fp);
+      return -1;
    }
 
-   blake3_hasher_update(&hasher, buff, statbuff.st_size);
+   size_t bytes_read;
+   for ( ; (bytes_read = fread(buff, 1, 65536, fp)) > 0; )
+      blake3_hasher_update(&hasher, buff, bytes_read);
+
+   if (ferror(fp))
+   {
+      fprintf(stderr, "Error: failed to read stat'd file for hashing\n");
+      free(buff);
+      fclose(fp);
+      return -1;
+   }
 
    uint8_t output[BLAKE3_OUT_LEN];
    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
@@ -417,6 +428,9 @@ int sht_hash(const char* filename)
    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++)
       printf("%02x", output[i]);
    printf("\n");
+
+   free(buff);
+   fclose(fp);
 
    return 0;
 }
