@@ -479,6 +479,37 @@ int sht_determine_objects_recursive(const char* dir_path_rec)
    return reg_count;
 }
 
+int sht_b3sum_hash(const char* filename, FILE* status_file)
+{
+   static char*  command_s = NULL;
+   static size_t command_n = 0;
+
+   size_t command_n_new = strlen(filename) + 7;
+   if (command_n_new > command_n)
+   {
+      command_n = command_n_new;
+      command_s = realloc(command_s, command_n);
+      if (command_s == NULL)
+      {
+         perror("Error: failed to alloc command buffer");
+         exit(EXIT_FAILURE);
+      }
+   }
+
+   if (command_s == NULL)
+      return -1;
+
+   int wb = snprintf(command_s, command_n, "b3sum %s", filename);
+   if (wb >= command_n)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      return -1;
+   }
+   int rv = system(command_s);
+   fflush(status_file);
+   return rv;
+}
+
 FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag)
 {
    int dir_count = 0;
@@ -523,35 +554,20 @@ DETERMINE_OBJECTS_TRY_IMP:
       }
       else
       {
-         size_t command_n = strlen(files[ent]->d_name) + 7;
-         char* command_s = malloc(command_n);
-         if (command_s == NULL)
-            exit(EXIT_FAILURE);
-
-         int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
-         if (wb >= command_n)
+         if (sht_b3sum_hash(files[ent]->d_name, status_file))
          {
-            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-            return NULL;
-         }
-         int rv = system(command_s);
-         fflush(status_file);
-         if (rv == -1)
-         {
-            const FILE* stdfp;
-            stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
-            stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
-            perror("b3sum sys call failed");
-         }
-         else if (rv && use_c_blake_imp == 0)
-         {
-            fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
-            use_c_blake_imp = 1;
-            goto DETERMINE_OBJECTS_TRY_IMP;
+            if (rv == -1)
+            {
+               fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
+               perror("b3sum: ");
+               exit(EXIT_FAILURE);
+            }
+            else if (rv)
+            {
+               fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
+               use_c_blake_imp = 1;
+               goto DETERMINE_OBJECTS_TRY_IMP:
+            }
          }
       }
 
@@ -564,7 +580,7 @@ DETERMINE_OBJECTS_TRY_IMP:
       goto DETERMINE_OBJECTS_RET_NULL;
 
    for (; ent < file_count; ent++)
-  {
+   {
       free(files[ent]);
    }
    free(files);
