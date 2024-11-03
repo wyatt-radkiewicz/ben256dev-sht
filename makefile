@@ -82,7 +82,7 @@ blake3-arm: clean-blake3
 
 # Compile `sht` executable, assuming BLAKE3 is installed
 build-sht: 
-	@gcc sht.c -O2 -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
+	@gcc sht.c -O3 -o sht -lblake3 -L$(PREFIX)/lib -I$(PREFIX)/include
 	@sudo cp sht $(PREFIX)/bin/
 
 # Debug version of 'make'

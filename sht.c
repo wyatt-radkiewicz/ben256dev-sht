@@ -427,6 +427,7 @@ int sht_hash(const char* filename)
 
    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++)
       printf("%02x", output[i]);
+   printf(" %.127s", filename);
    printf("\n");
 
    free(buff);
@@ -515,10 +516,10 @@ DETERMINE_OBJECTS_TRY_IMP:
       if (use_c_blake_imp)
       {
          if (sht_hash(files[ent]->d_name))
-	 {
+         {
             fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
-	    exit(EXIT_FAILURE);
-	 }
+            exit(EXIT_FAILURE);
+         }
       }
       else
       {
@@ -548,19 +549,10 @@ DETERMINE_OBJECTS_TRY_IMP:
          }
          else if (rv && use_c_blake_imp == 0)
          {
-            const FILE* stdfp;
-            stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
-            stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
             fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
             use_c_blake_imp = 1;
-	    goto DETERMINE_OBJECTS_TRY_IMP;
+            goto DETERMINE_OBJECTS_TRY_IMP;
          }
-         //else
-         //   exit(EXIT_FAILURE);
       }
 
       free(files[ent]);
@@ -891,8 +883,14 @@ int main(int argc, const char* argv[])
       }
 
       int tracked_count = 0;
-      for (; fscanf(fp, "%64s %127s", hash, tag) != EOF; )
+      int matched;
+      for (; (matched = fscanf(fp, "%64s %127s", hash, tag)) != EOF; )
       {
+         if (matched != 2)
+         {
+            fprintf(stderr, "Error: failed to match out of status file\n");
+            goto STATUS_FREE_BUFFERS;
+         }
          int wb;
          wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
          if (wb >= 512)
