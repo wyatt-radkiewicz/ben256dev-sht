@@ -47,7 +47,7 @@ int sht_parse_error(const char* parsed, int i, const char* i_name, const char* f
             else if (format[f] == '%')
             {
                int spaces_nested = i + strlen(i_name) + 6 + f + 1;
-               char* nested_format = malloc(strlen(format));
+               char* nested_format = malloc(strlen(format) + 1);
                if (nested_format == NULL)
                {
                   perror("Error: failed to malloc nested format string");
@@ -403,7 +403,11 @@ int sht_hash(const char* filename)
    blake3_hasher_init(&hasher);
 
    uint8_t* buff = malloc(statbuff.st_size);
-   fread(buff, 1, statbuff.st_size, fp);
+   int wb = fread(buff, 1, statbuff.st_size, fp);
+   if (wb != statbuff.st_size)
+   {
+      fprintf(stderr, "Error: failed to read expected bytes for hashing stat'd file\n");
+   }
 
    blake3_hasher_update(&hasher, buff, statbuff.st_size);
 
@@ -519,18 +523,24 @@ DETERMINE_OBJECTS_TRY_IMP:
          fflush(status_file);
          if (rv == -1)
          {
-            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            const FILE* stdfp;
+            stdfp = freopen("/dev/tty", "w", stdout);
             if (stdfp == NULL)
                goto DETERMINE_OBJECTS_RET_NULL;
-            freopen("/dev/tty", "w", stdout);
+            stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
             perror("b3sum sys call failed");
          }
          else if (rv && use_c_blake_imp == 0)
          {
-            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
+            const FILE* stdfp;
+            stdfp = freopen("/dev/tty", "w", stdout);
             if (stdfp == NULL)
                goto DETERMINE_OBJECTS_RET_NULL;
-            freopen("/dev/tty", "w", stdout);
+            stdfp = freopen("/dev/tty", "w", stdout);
+            if (stdfp == NULL)
+               goto DETERMINE_OBJECTS_RET_NULL;
             fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
             use_c_blake_imp = 1;
 	    goto DETERMINE_OBJECTS_TRY_IMP;
