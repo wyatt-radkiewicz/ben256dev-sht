@@ -65,7 +65,7 @@ int sht_parse_error(const char* parsed, int i, const char* i_name, const char* f
                spaces_nested += 7;
                for (int s = 0; s < spaces_nested; s++)
                   putchar(' ');
-               printf("%s", "   Try using \"%k\" instead\n");
+               printf("%*s%s", SHT_IND_LEVEL, "", "Try using \"%k\" instead\n");
                return -1;
             }
          }
@@ -209,7 +209,7 @@ int sht_check_complain()
    {
       case 1:
          printf("Not a sht repository\n");
-         printf("  (run \"%ssht init%s\" to initialize repository)\n", SHT_YELLOW_RECCOMEND, SHT_RESET);
+         printf("%*s(run \"%ssht init%s\" to initialize repository)\n", SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, SHT_RESET);
          break;
       case 2:
          fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
@@ -222,7 +222,7 @@ int sht_check_complain()
    {
       case 2:
       case 3:
-         printf("  (run \"%ssht init%s\" to fix these files)\n", SHT_YELLOW_RECCOMEND, SHT_RESET);
+         printf("%*s(run \"%ssht init%s\" to fix these files)\n", SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, SHT_RESET);
    }
 
    return cl;
@@ -529,15 +529,18 @@ FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag
    if (files[0]->d_type == DT_DIR && opt_flag & SHT_DETERMINE_OBJECTS_API_NOTIFY)
    {
       fprintf(status_directories_file, "Untracked Directories:\n");
-      fprintf(status_directories_file, "  (NOTE: sht does not maintain a tree structure for directories)\n");
-      fprintf(status_directories_file, "  (NOTE: use \"--recursive\" to track contents of directories recursively)\n");
+      fprintf(status_directories_file, "%*s(NOTE: sht does not maintain a tree structure for directories)\n", SHT_IND_LEVEL, "");
+      fprintf(status_directories_file, "%*s%s(NOTE: use \"--recursive\" to track contents of directories recursively)%s\n", SHT_IND_LEVEL, "",
+                                    SHT_STRIKETHROUGH,                                                     SHT_STRIKETHROUGH_END);
    }
+   fprintf(status_directories_file, "%s", SHT_DARK);
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      fprintf(status_directories_file, "    %s/\n", files[ent]->d_name);
+      fprintf(status_directories_file, "%*s%s/\n", SHT_IND_ITEM, "", files[ent]->d_name);
       free(files[ent]);
       dir_count++;
    }
+   fprintf(status_directories_file, "%s", SHT_RESET);
 
    FILE* status_file = freopen(".sht/status.sht", "w", stdout);
    if (status_file == NULL)
@@ -663,14 +666,14 @@ int sht_check(const char* argv[], char** tag_ptr, char** hash_ptr)
       if (sv != 0)
       {
          fprintf(stderr, "Error: file %s was neither found in an existing status nor is it present in your directory\n", argv[2]);
-         fprintf(stderr, "  Are you trying to check a file which was presently detected by status?\n");
-         fprintf(stderr, "  NOTE: running --status overwrites previous detections by status for currently non-existing files\n");
+         fprintf(stderr, "%*sAre you trying to check a file which was presently detected by status?\n", SHT_IND_ITEM, "");
+         fprintf(stderr, "%*sNOTE: running --status overwrites previous detections by status for currently non-existing files\n", SHT_IND_ITEM, "");
 
          goto SHT_CHECK_RET_ERROR;
       }
 
       fprintf(stderr, "Error: could not find file \"%s\" in status\n", argv[2]);
-      fprintf(stderr, "  (try running %s %s %s --status or run %s status first)\n", argv[0], argv[1], argv[2], argv[0]);
+      fprintf(stderr, "%*s(try running %s %s %s --status or run %s status first)\n", SHT_IND_ITEM, "", argv[0], argv[1], argv[2], argv[0]);
       goto SHT_CHECK_RET_ERROR;
    }
 
@@ -756,7 +759,7 @@ int sht_normalize_files(int force_flag)
       if (force_flag == 0)
       {
          printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
-         printf("   [a | Y/n | q]: ");
+         printf("%*s[a | Y/n | q]: ", SHT_IND_ITEM, "");
          char v[4];
          if (fgets(v, 4, stdin) == NULL)
          {
@@ -775,8 +778,8 @@ int sht_normalize_files(int force_flag)
       {
          if (rename(line_buff, line_buff_delim_byte + 1))
          {
-            fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
-            perror("   ");
+            fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization: %s\n",
+                                                       line_buff, line_buff_delim_byte + 1, strerror(errno));
             goto NORMALIZE_RET_ERROR;
          }
       }
@@ -863,8 +866,8 @@ int main(int argc, const char* argv[])
       if (suck_count)
       {
          printf("%d of your filenames suck. Refusing to perform \"%s status\"\n", suck_count, argv[0]);
-         printf("  (Try running \"%s normalize-files\" to automatically rename files one-by-one)\n", argv[0]);
-         printf("  (NOTE: run \"%s normalize-files --force\" to force rename all files)\n", argv[0]);
+         printf("%*s(Try running \"%s normalize-files\" to automatically rename files one-by-one)\n", SHT_IND_LEVEL, "", argv[0]);
+         printf("%*s(NOTE: run \"%s normalize-files --force\" to force rename all files)\n", SHT_IND_LEVEL, "", argv[0]);
          return 0;
       }
 
@@ -930,11 +933,11 @@ int main(int argc, const char* argv[])
             goto STATUS_FILE_IS_UNTRACKED;
 
          tracked_count++;
-         fprintf(status_tracked_file, "  %s\n", tag);
+         fprintf(status_tracked_file, "%*s%s\n", SHT_IND_ITEM, "", tag);
          continue;
 
 STATUS_FILE_IS_UNTRACKED:
-         fprintf(status_untracked_file, "  %s\n", tag);
+         fprintf(status_untracked_file, "%*s%s\n", SHT_IND_ITEM, "", tag);
       }
       if (ferror(fp))
          perror("Error while reading status.sht");
@@ -960,7 +963,7 @@ STATUS_FILE_IS_UNTRACKED:
          {
             if (dir_count)
                printf("\n");
-            printf("Tracked Files:\n");
+            printf("Tracked Files:%s\n", SHT_BRIGHT_GREEN);
             status_tracked_file = fopen(".sht/status-tracked.sht", "r");
             if (status_tracked_file == NULL)
             {
@@ -968,13 +971,14 @@ STATUS_FILE_IS_UNTRACKED:
                return -1;
             }
             for (char c; ( c = fgetc(status_tracked_file) ) != EOF; putchar(c));
+            printf("%s", SHT_RESET);
             fclose(status_tracked_file);
          }
          if (tracked_count < reg_count)
          {
             if (dir_count + tracked_count)
                printf("\n");
-            printf("Untracked Files:\n");
+            printf("Untracked Files:%s\n", SHT_ORANGE);
             status_untracked_file = fopen(".sht/status-untracked.sht", "r");
             if (status_untracked_file == NULL)
             {
@@ -982,6 +986,7 @@ STATUS_FILE_IS_UNTRACKED:
                return -1;
             }
             for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
+            puts(SHT_RESET);
             fclose(status_untracked_file);
          }
       }
@@ -996,7 +1001,7 @@ STATUS_FREE_BUFFERS:
       if (argc < 3)
       {
          printf("Nothing specified for \"%s store\"\n", argv[0]);
-         printf("  try running \"%s store [FILE] ...\" to track files\n", argv[0]);
+         printf("%*stry running \"%s store [FILE] ...\" to track files\n", SHT_IND_LEVEL, "", argv[0]);
       }
 
       FILE* rv = sht_determine_objects(0, 0, 0);
@@ -1035,7 +1040,7 @@ STATUS_FREE_BUFFERS:
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
          {
             printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
-            printf("  (NOTE: \"%s %s\" does not support flags)\n", argv[0], argv[1]);
+            printf("%*s(NOTE: \"%s %s\" does not support flags)\n", SHT_IND_LEVEL, "", argv[0], argv[1]);
             args_need_match[i] = NULL;
             continue;
          }
@@ -1185,7 +1190,7 @@ STATUS_FREE_BUFFERS:
       if (argc < 3)
       {
          printf("Nothing specified for \"%s wipe\"\n", argv[0]);
-         printf("  try running \"%s wipe [FILE] ...\" to erase files\n", argv[0]);
+         printf("%*stry running \"%s wipe [FILE] ...\" to erase files\n", SHT_IND_LEVEL, "", argv[0]);
          return 0;
       }
 
@@ -1215,7 +1220,7 @@ STATUS_FREE_BUFFERS:
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
          {
             printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
-            printf("  (NOTE: \"%s %s\" does not support flags)\n", argv[0], argv[1]);
+            printf("%*s(NOTE: \"%s %s\" does not support flags)\n", SHT_IND_LEVEL, "", argv[0], argv[1]);
             args_need_match[i] = NULL;
             continue;
          }
@@ -1352,7 +1357,8 @@ SHT_WIPE_RET_ERR:
       if (argc < 3)
       {
          printf("Nothing specified for \"%s%s tag%s\"\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
-         printf("  Try running \"%s%s tag [tag-name | keyword:tag-name] ...%s\" to tag files\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
+         printf("%*sTry running \"%s%s tag [tag-name | keyword:tag-name] ...%s\" to tag files\n",
+            SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, argv[0],           SHT_RESET);
          return 0;
       }
 
@@ -1380,7 +1386,8 @@ SHT_WIPE_RET_ERR:
    else
    {
       printf("%s: unrecognized command \"%s\"\n", argv[0], argv[1]);
-      printf("   Try running \"%s%s -h%s\" for help\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
+      printf("%*s Try running \"%s%s -h%s\" for help\n",
+            SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, argv[0],           SHT_RESET);
 
       return 0;
    }
