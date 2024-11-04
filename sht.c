@@ -11,6 +11,8 @@
 
 #include <blake3.h>
 
+#include "shtcol.h"
+
 typedef char sht_pardir_buff   [512];
 typedef char sht_tag_buff      [128];
 typedef char sht_hash_buff     [65];
@@ -207,7 +209,7 @@ int sht_check_complain()
    {
       case 1:
          printf("Not a sht repository\n");
-         printf("  (run \"sht init\" to initialize repository)\n");
+         printf("  (run \"%ssht init%s\" to initialize repository)\n", SHT_YELLOW_RECCOMEND, SHT_RESET);
          break;
       case 2:
          fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
@@ -220,7 +222,7 @@ int sht_check_complain()
    {
       case 2:
       case 3:
-         printf("  (run \"sht init\" to fix these files)\n");
+         printf("  (run \"%ssht init%s\" to fix these files)\n", SHT_YELLOW_RECCOMEND, SHT_RESET);
    }
 
    return cl;
@@ -1349,8 +1351,8 @@ SHT_WIPE_RET_ERR:
    {
       if (argc < 3)
       {
-         printf("Nothing specified for \"%s tag\"\n", argv[0]);
-         printf("  Try running \"%s tag [tag-name | keyword:tag-name] ...\" to tag files\n", argv[0]);
+         printf("Nothing specified for \"%s%s tag%s\"\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
+         printf("  Try running \"%s%s tag [tag-name | keyword:tag-name] ...%s\" to tag files\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
          return 0;
       }
 
@@ -1378,7 +1380,7 @@ SHT_WIPE_RET_ERR:
    else
    {
       printf("%s: unrecognized command \"%s\"\n", argv[0], argv[1]);
-      printf("   Try running \"\e[1;2;33m%s -h\e[0m\" for help\n", argv[0]);
+      printf("   Try running \"%s%s -h%s\" for help\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
 
       return 0;
    }
