@@ -479,7 +479,7 @@ int sht_determine_objects_recursive(const char* dir_path_rec)
    return reg_count;
 }
 
-int sht_b3sum_hash(const char* filename, FILE* status_file)
+int sht_b3sum_hash(const char* filename)
 {
    static char*  command_s = NULL;
    static size_t command_n = 0;
@@ -506,21 +506,22 @@ int sht_b3sum_hash(const char* filename, FILE* status_file)
       return -1;
    }
    int rv = system(command_s);
-   fflush(status_file);
    return rv;
 }
+
+typedef int (*sht_hash_fun_ptr)(const char* filename);
 
 FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag)
 {
    int dir_count = 0;
    int reg_count = 0;
 
+   struct dirent** files;
+   int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
+
    FILE* status_directories_file = fopen(".sht/status-directories.sht", "w");
    if (status_directories_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
-
-   struct dirent** files;
-   int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
 
    int ent = 0;
    if (files[0]->d_type == DT_DIR && opt_flag & SHT_DETERMINE_OBJECTS_API_NOTIFY)
@@ -543,7 +544,6 @@ FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag
    int use_c_blake_imp = 0;
    for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
-DETERMINE_OBJECTS_TRY_IMP:
       if (use_c_blake_imp)
       {
          if (sht_hash(files[ent]->d_name))
@@ -554,19 +554,20 @@ DETERMINE_OBJECTS_TRY_IMP:
       }
       else
       {
-         if (sht_b3sum_hash(files[ent]->d_name, status_file))
+         int rv = sht_b3sum_hash(files[ent]->d_name);
+         fflush(status_file);
+         if (rv)
          {
             if (rv == -1)
             {
                fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
-               perror("b3sum: ");
                exit(EXIT_FAILURE);
             }
-            else if (rv)
+            else
             {
                fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
                use_c_blake_imp = 1;
-               goto DETERMINE_OBJECTS_TRY_IMP:
+               ent--;
             }
          }
       }
@@ -1377,8 +1378,7 @@ SHT_WIPE_RET_ERR:
    else
    {
       printf("%s: unrecognized command \"%s\"\n", argv[0], argv[1]);
-      printf("   Try running \"%s\" -h for help\n", argv[0]);
-      printf("   JK it doesn't exist yet\n");
+      printf("   Try running \"\e[1;2;33m%s -h\e[0m\" for help\n", argv[0]);
 
       return 0;
    }
