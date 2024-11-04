@@ -99,7 +99,7 @@ autocomp:
 		mkdir -p $$HOME/.local/share/bash-completion/completions && \
 		cp sht_complete.sh $$HOME/.local/share/bash-completion/completions/sht; \
 	fi
-	@echo "You may now \"source ~/.bashrc\" to make autocompletions accessible"
+	@echo "You may have to \"source ~/.bashrc\" to make autocompletions accessible"
 
 # Full install with dependencies and autocompletion
 install: build autocomp
