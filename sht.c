@@ -6,17 +6,190 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <ctype.h>
 #include <stdint.h>
 
 #include <blake3.h>
 
+#include "shtcol.h"
+
 typedef char sht_pardir_buff   [512];
-typedef char sht_ref_buff      [128];
+typedef char sht_tag_buff      [128];
 typedef char sht_hash_buff     [65];
 
 void sht_print_usage()
 {
    printf("usage: sht [<command>]\n");
+}
+int sht_parse_error(const char* parsed, int i, const char* i_name, const char* format, const char* keyword, size_t keyword_n)
+{
+   puts(parsed);
+   for (int j = 0; j < i; j++)
+      putchar(' ');
+   printf("^\n");
+   for (int j = 0; j < i; j++)
+      putchar(' ');
+   printf("%s      ", i_name);
+   if (keyword && keyword_n > 0)
+   {
+      if (format)
+      {
+         int last_k = 0;
+         int matched = 0;
+         for (int f = 0; format[f] != '\0'; f++)
+         {
+            if (strncmp("%k", &format[f], 2) == 0)
+            {
+               fwrite(&format[last_k], 1, f, stdout);
+               fwrite(keyword, 1, keyword_n, stdout);
+               last_k = f+2;
+               f++;
+               matched++;
+            }
+            else if (format[f] == '%')
+            {
+               int spaces_nested = i + strlen(i_name) + 6 + f + 1;
+               char* nested_format = malloc(strlen(format) + 1);
+               if (nested_format == NULL)
+               {
+                  perror("Error: failed to malloc nested format string");
+                  return -1;
+               }
+               strcpy(nested_format, format);
+
+               char* ch = strchr(nested_format, '\n');
+               if (ch)
+                  (*ch) = '\0';
+               sht_parse_error(nested_format, spaces_nested, "f", "Error: Unsupported format specifier\n", 0, 0);
+
+               spaces_nested += 7;
+               for (int s = 0; s < spaces_nested; s++)
+                  putchar(' ');
+               printf("%*s%s", SHT_IND_LEVEL, "", "Try using \"%k\" instead\n");
+               return -1;
+            }
+         }
+         if (last_k)
+            printf("%s", &format[last_k]);
+
+         return matched;
+      }
+      else
+      {
+         printf("\"");
+         fwrite(keyword, 1, keyword_n, stdout);
+         printf("\" invalid keyword\n");
+      }
+   }
+   if (format)
+      printf("%s", format);
+   else
+   {
+      printf("\"");
+      fwrite(parsed, 1, i, stdout);
+      printf("\" invalid keyword\n");
+   }
+
+   return 0;
+}
+int sht_parse_filename(const char* arg)
+{
+   if (arg == NULL)
+   {
+      fprintf(stderr, "Error: must specify arg to parse filename\n");
+      return -1;
+   }
+
+   int dot_found = 0;
+   for (int i = 0; arg[i] != '\0'; i++)
+   {
+      char c = isalnum(arg[i]) ? 'A' : arg[i];
+      switch (c)
+      {
+         case 'A':
+            break;
+         case '.':
+            dot_found++;
+            if (dot_found > 1)
+            {
+               if (sht_parse_error(arg, i, "i", "additional '.' found in extension of file \"%k\"\n", arg, i) != 1)
+               {
+                  fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+                  return -1;
+               }
+               return -1;
+            }
+            continue;
+         default:
+            if (sht_parse_error(arg, i, "i", "Note: file name must only contain alphanumeric or '_'\n", 0, 0) != 1)
+            {
+               fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+               return -1;
+            }
+            fprintf(stderr, "Hi\n");
+         case '-':
+            /*
+            if (i == 0)
+               // ask user if they are trying to specify argument flag as filename
+            else
+               // ask user if they are trying to specify tag as filename
+            */
+            return -1;
+      }
+   }
+}
+int sht_parse_tag(const char* arg, const char** keyword_ptr)
+{
+   if (arg == NULL)
+   {
+      fprintf(stderr, "Error: must specify arg to parse tag\n");
+      return -1;
+   }
+   if (keyword_ptr == NULL)
+   {
+      fprintf(stderr, "Error: must specify keyword ptr\n");
+      return -1;
+   }
+
+   for (int i = 0; arg[i] != '\0'; i++)
+   {
+      char c = (isdigit(arg[i]) || islower(arg[i])) ? 'a' : arg[i];
+      switch (c)
+      {
+         case 'a':
+            break;
+         case ':':
+            if (strncmp("filename:", arg, i) == 0)
+            {
+               (*keyword_ptr) = arg + i + 1;
+               return sht_parse_filename(*keyword_ptr);
+            }
+            else if (sht_parse_error(arg, i, "i", "\"%k\" is not a valid keyword\n", arg, i) != 1)
+            {
+               fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+               return -1;
+            }
+            continue;
+         case '-':
+            if (i == 0)
+            {
+               if (sht_parse_error(arg, i, "i", "Note: tag name must not contain leading '-'\n", 0, 0) != 1)
+               {
+                  fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+                  return -1;
+               }
+               return 0;
+            }
+            break;
+         default:
+            if (sht_parse_error(arg, i, "i","Note: tag name must only contain lowercase alphanumeric or '-'\n", 0, 0) != 1)
+            {
+               fprintf(stderr, "Error: failed to match arguments while printing parse error\n");
+               return -1;
+            }
+            return 0;
+      }
+   }
 }
 int sht_check_tree()
 {
@@ -24,7 +197,7 @@ int sht_check_tree()
       return 1;
    if (access(".sht/objects", F_OK))
       return 2;
-   if (access(".sht/refs", F_OK))
+   if (access(".sht/tags", F_OK))
       return 3;
 
    return 0;
@@ -36,24 +209,20 @@ int sht_check_complain()
    {
       case 1:
          printf("Not a sht repository\n");
-         printf("  (run \"sht init\" to initialize repository)\n");
+         printf("%*s(run \"%ssht init%s\" to initialize repository)\n", SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, SHT_RESET);
          break;
       case 2:
          fprintf(stderr, "Error: directory \".sht/objects\" not found\n");
          break;
       case 3:
-         fprintf(stderr, "Error: directory \".sht/refs\" not found\n");
+         fprintf(stderr, "Error: directory \".sht/tags\" not found\n");
          break;
-      case 0:
-         return 0;
-      default:
-         return -1;
    }
    switch (cl)
    {
       case 2:
       case 3:
-         printf("  (run \"sht init\" to fix these files)\n");
+         printf("%*s(run \"%ssht init%s\" to fix these files)\n", SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, SHT_RESET);
    }
 
    return cl;
@@ -70,14 +239,14 @@ int sht_status_compar(const struct dirent** a, const struct dirent** b)
 {
    return ((*a)->d_type - (*b)->d_type);
 }
-int sht_get_ref(sht_ref_buff ref, sht_hash_buff* hash_out)
+int sht_get_tag(sht_tag_buff tag, sht_hash_buff* hash_out)
 {
-   if (ref == NULL)
+   if (tag == NULL)
       return -1;
 
    sht_pardir_buff pardir;
 
-   int wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
+   int wb = snprintf(pardir, 512, ".sht/tags/%.128s", tag);
    if (wb >= 512)
    {
       fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -235,17 +404,36 @@ int sht_hash(const char* filename)
    blake3_hasher hasher;
    blake3_hasher_init(&hasher);
 
-   uint8_t* buff = malloc(statbuff.st_size);
-   fread(buff, 1, statbuff.st_size, fp);
+   uint8_t* buff = malloc(65536);
+   if (buff == NULL)
+   {
+      perror("Error: failed to allocate chunk buffer");
+      fclose(fp);
+      return -1;
+   }
 
-   blake3_hasher_update(&hasher, buff, statbuff.st_size);
+   size_t bytes_read;
+   for ( ; (bytes_read = fread(buff, 1, 65536, fp)) > 0; )
+      blake3_hasher_update(&hasher, buff, bytes_read);
+
+   if (ferror(fp))
+   {
+      fprintf(stderr, "Error: failed to read stat'd file for hashing\n");
+      free(buff);
+      fclose(fp);
+      return -1;
+   }
 
    uint8_t output[BLAKE3_OUT_LEN];
    blake3_hasher_finalize(&hasher, output, BLAKE3_OUT_LEN);
 
    for (size_t i = 0; i < BLAKE3_OUT_LEN; i++)
       printf("%02x", output[i]);
+   printf(" %.127s", filename);
    printf("\n");
+
+   free(buff);
+   fclose(fp);
 
    return 0;
 }
@@ -293,31 +481,66 @@ int sht_determine_objects_recursive(const char* dir_path_rec)
    return reg_count;
 }
 
+int sht_b3sum_hash(const char* filename)
+{
+   static char*  command_s = NULL;
+   static size_t command_n = 0;
+
+   size_t command_n_new = strlen(filename) + 7;
+   if (command_n_new > command_n)
+   {
+      command_n = command_n_new;
+      command_s = realloc(command_s, command_n);
+      if (command_s == NULL)
+      {
+         perror("Error: failed to alloc command buffer");
+         exit(EXIT_FAILURE);
+      }
+   }
+
+   if (command_s == NULL)
+      return -1;
+
+   int wb = snprintf(command_s, command_n, "b3sum %s", filename);
+   if (wb >= command_n)
+   {
+      fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
+      return -1;
+   }
+   int rv = system(command_s);
+   return rv;
+}
+
+typedef int (*sht_hash_fun_ptr)(const char* filename);
+
 FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag)
 {
    int dir_count = 0;
    int reg_count = 0;
 
+   struct dirent** files;
+   int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
+
    FILE* status_directories_file = fopen(".sht/status-directories.sht", "w");
    if (status_directories_file == NULL)
       goto DETERMINE_OBJECTS_RET_NULL;
-
-   struct dirent** files;
-   int file_count = scandir(".", &files, &sht_status_filter, &sht_status_compar);
 
    int ent = 0;
    if (files[0]->d_type == DT_DIR && opt_flag & SHT_DETERMINE_OBJECTS_API_NOTIFY)
    {
       fprintf(status_directories_file, "Untracked Directories:\n");
-      fprintf(status_directories_file, "  (NOTE: sht does not maintain a tree structure for directories)\n");
-      fprintf(status_directories_file, "  (NOTE: use \"--recursive\" to track contents of directories recursively)\n");
+      fprintf(status_directories_file, "%*s(NOTE: sht does not maintain a tree structure for directories)\n", SHT_IND_LEVEL, "");
+      fprintf(status_directories_file, "%*s%s(NOTE: use \"--recursive\" to track contents of directories recursively)%s\n", SHT_IND_LEVEL, "",
+                                    SHT_STRIKETHROUGH,                                                     SHT_STRIKETHROUGH_END);
    }
+   fprintf(status_directories_file, "%s", SHT_DARK);
    for (; ent < file_count && files[ent]->d_type == DT_DIR; ent++)
    {
-      fprintf(status_directories_file, "    %s/\n", files[ent]->d_name);
+      fprintf(status_directories_file, "%*s%s/\n", SHT_IND_ITEM, "", files[ent]->d_name);
       free(files[ent]);
       dir_count++;
    }
+   fprintf(status_directories_file, "%s", SHT_RESET);
 
    FILE* status_file = freopen(".sht/status.sht", "w", stdout);
    if (status_file == NULL)
@@ -326,50 +549,32 @@ FILE* sht_determine_objects(int* dir_count_ptr, int* reg_count_ptr, int opt_flag
    int use_c_blake_imp = 0;
    for (; ent < file_count && files[ent]->d_type == DT_REG; ent++)
    {
-DETERMINE_OBJECTS_TRY_IMP:
       if (use_c_blake_imp)
       {
          if (sht_hash(files[ent]->d_name))
-	 {
+         {
             fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
-	    exit(EXIT_FAILURE);
-	 }
+            exit(EXIT_FAILURE);
+         }
       }
       else
       {
-         size_t command_n = strlen(files[ent]->d_name) + 7;
-         char* command_s = malloc(command_n);
-         if (command_s == NULL)
-            exit(EXIT_FAILURE);
-
-         int wb = snprintf(command_s, command_n, "b3sum %s", files[ent]->d_name);
-         if (wb >= command_n)
-         {
-            fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
-            return NULL;
-         }
-         int rv = system(command_s);
+         int rv = sht_b3sum_hash(files[ent]->d_name);
          fflush(status_file);
-         if (rv == -1)
+         if (rv)
          {
-            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
-            freopen("/dev/tty", "w", stdout);
-            perror("b3sum sys call failed");
+            if (rv == -1)
+            {
+               fprintf(stderr, "Error: failed to hash file \"%s\"\n", files[ent]->d_name);
+               exit(EXIT_FAILURE);
+            }
+            else
+            {
+               fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
+               use_c_blake_imp = 1;
+               ent--;
+            }
          }
-         else if (rv && use_c_blake_imp == 0)
-         {
-            const FILE* stdfp = freopen("/dev/tty", "w", stdout);
-            if (stdfp == NULL)
-               goto DETERMINE_OBJECTS_RET_NULL;
-            freopen("/dev/tty", "w", stdout);
-            fprintf(stderr, "b3sum utility not found. proceeding with slower C implementation...\n");
-            use_c_blake_imp = 1;
-	    goto DETERMINE_OBJECTS_TRY_IMP;
-         }
-         //else
-         //   exit(EXIT_FAILURE);
       }
 
       free(files[ent]);
@@ -381,7 +586,7 @@ DETERMINE_OBJECTS_TRY_IMP:
       goto DETERMINE_OBJECTS_RET_NULL;
 
    for (; ent < file_count; ent++)
-  {
+   {
       free(files[ent]);
    }
    free(files);
@@ -397,12 +602,12 @@ DETERMINE_OBJECTS_RET_NULL:
    return NULL;
 }
 
-int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
+int sht_check(const char* argv[], char** tag_ptr, char** hash_ptr)
 {
    const char* status_file_path;
 
    sht_pardir_buff pardir;
-   sht_ref_buff    ref;
+   sht_tag_buff    tag;
    sht_hash_buff   hash;
 
    if (strcmp("--status", argv[3]) == 0)
@@ -444,9 +649,9 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
    }
 
    int found_file = 0;
-   for (; fscanf(status_file, "%64s %127s", hash, ref) != EOF; )
+   for (; fscanf(status_file, "%64s %127s", hash, tag) != EOF; )
    {
-      if (strcmp(ref, argv[2]) == 0)
+      if (strcmp(tag, argv[2]) == 0)
       {
          found_file = 1;
          break;
@@ -461,14 +666,14 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
       if (sv != 0)
       {
          fprintf(stderr, "Error: file %s was neither found in an existing status nor is it present in your directory\n", argv[2]);
-         fprintf(stderr, "  Are you trying to check a file which was presently detected by status?\n");
-         fprintf(stderr, "  NOTE: running --status overwrites previous detections by status for currently non-existing files\n");
+         fprintf(stderr, "%*sAre you trying to check a file which was presently detected by status?\n", SHT_IND_ITEM, "");
+         fprintf(stderr, "%*sNOTE: running --status overwrites previous detections by status for currently non-existing files\n", SHT_IND_ITEM, "");
 
          goto SHT_CHECK_RET_ERROR;
       }
 
       fprintf(stderr, "Error: could not find file \"%s\" in status\n", argv[2]);
-      fprintf(stderr, "  (try running %s %s %s --status or run %s status first)\n", argv[0], argv[1], argv[2], argv[0]);
+      fprintf(stderr, "%*s(try running %s %s %s --status or run %s status first)\n", SHT_IND_ITEM, "", argv[0], argv[1], argv[2], argv[0]);
       goto SHT_CHECK_RET_ERROR;
    }
 
@@ -495,7 +700,7 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
          file_track_status |= 1;
    }
 
-   wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
+   wb = snprintf(pardir, 512, ".sht/tags/%.128s", tag);
    if (wb >= 512)
    {
       fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -507,16 +712,16 @@ int sht_check(const char* argv[], char** ref_ptr, char** hash_ptr)
 
    if (hash_ptr)
       (*hash_ptr) = hash;
-   if (ref_ptr)
-      (*ref_ptr) = ref;
+   if (tag_ptr)
+      (*tag_ptr) = tag;
 
    return file_track_status;
 
 SHT_CHECK_RET_ERROR:
    if (hash_ptr)
       (*hash_ptr) = hash;
-   if (ref_ptr)
-      (*ref_ptr) = ref;
+   if (tag_ptr)
+      (*tag_ptr) = tag;
    
    return -1;
 }
@@ -554,7 +759,7 @@ int sht_normalize_files(int force_flag)
       if (force_flag == 0)
       {
          printf("Normalize file '%s' to %s?\n", line_buff, line_buff_delim_byte + 1);
-         printf("   [a | Y/n]: ");
+         printf("%*s[a | Y/n | q]: ", SHT_IND_ITEM, "");
          char v[4];
          if (fgets(v, 4, stdin) == NULL)
          {
@@ -565,14 +770,16 @@ int sht_normalize_files(int force_flag)
             force_ent = 1;
          if (v[0] == 'a' || v[0] == 'A')
             force_ent = force_flag = 1;
+         if (v[0] == 'q' || v[0] == 'Q')
+            exit(EXIT_SUCCESS);
       }
 
       if (force_flag || force_ent)
       {
          if (rename(line_buff, line_buff_delim_byte + 1))
          {
-            fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization\n", line_buff, line_buff_delim_byte + 1);
-            perror("   ");
+            fprintf(stderr, "Error: failed to rename file \"%s\" to \"%s\" for normalization: %s\n",
+                                                       line_buff, line_buff_delim_byte + 1, strerror(errno));
             goto NORMALIZE_RET_ERROR;
          }
       }
@@ -610,9 +817,9 @@ int main(int argc, const char* argv[])
                perror("Error: failed to make sht objects directory");
                return -1;
             }
-            if (mkdir(".sht/refs/", 0777))
+            if (mkdir(".sht/tags/", 0777))
             {
-               perror("Error: failed to make sht refs directory");
+               perror("Error: failed to make sht tags directory");
                return -1;
             }
             printf("sht repository created\n");
@@ -620,14 +827,14 @@ int main(int argc, const char* argv[])
          case 2:
             if (mkdir(".sht/objects/", 0777))
             {
-               perror("Error: failed to make sht refs directory");
+               perror("Error: failed to make sht objects directory");
                return -1;
             }
             break;
          case 3:
-            if (mkdir(".sht/refs/", 0777))
+            if (mkdir(".sht/tags/", 0777))
             {
-               perror("Error: failed to make sht refs directory");
+               perror("Error: failed to make sht tags directory");
                return -1;
             }
             break;
@@ -659,8 +866,8 @@ int main(int argc, const char* argv[])
       if (suck_count)
       {
          printf("%d of your filenames suck. Refusing to perform \"%s status\"\n", suck_count, argv[0]);
-         printf("  (NOTE: run \"%s normalize-files\" to automatically rename files one-by-one)\n", argv[0]);
-         printf("  (NOTE: run \"%s normalize-files --force\" to force rename all)\n", argv[0]);
+         printf("%*s(Try running \"%s normalize-files\" to automatically rename files one-by-one)\n", SHT_IND_LEVEL, "", argv[0]);
+         printf("%*s(NOTE: run \"%s normalize-files --force\" to force rename all files)\n", SHT_IND_LEVEL, "", argv[0]);
          return 0;
       }
 
@@ -681,7 +888,7 @@ int main(int argc, const char* argv[])
       }
 
       sht_pardir_buff pardir;
-      sht_ref_buff    ref;
+      sht_tag_buff    tag;
       sht_hash_buff   hash;
 
       FILE* status_tracked_file = fopen(".sht/status-tracked.sht", "w");
@@ -698,8 +905,14 @@ int main(int argc, const char* argv[])
       }
 
       int tracked_count = 0;
-      for (; fscanf(fp, "%64s %127s", hash, ref) != EOF; )
+      int matched;
+      for (; (matched = fscanf(fp, "%64s %127s", hash, tag)) != EOF; )
       {
+         if (matched != 2)
+         {
+            fprintf(stderr, "Error: failed to match out of status file\n");
+            goto STATUS_FREE_BUFFERS;
+         }
          int wb;
          wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
          if (wb >= 512)
@@ -720,11 +933,11 @@ int main(int argc, const char* argv[])
             goto STATUS_FILE_IS_UNTRACKED;
 
          tracked_count++;
-         fprintf(status_tracked_file, "  %s\n", ref);
+         fprintf(status_tracked_file, "%*s%s\n", SHT_IND_ITEM, "", tag);
          continue;
 
 STATUS_FILE_IS_UNTRACKED:
-         fprintf(status_untracked_file, "  %s\n", ref);
+         fprintf(status_untracked_file, "%*s%s\n", SHT_IND_ITEM, "", tag);
       }
       if (ferror(fp))
          perror("Error while reading status.sht");
@@ -750,7 +963,7 @@ STATUS_FILE_IS_UNTRACKED:
          {
             if (dir_count)
                printf("\n");
-            printf("Tracked Files:\n");
+            printf("Tracked Files:%s\n", SHT_BRIGHT_GREEN);
             status_tracked_file = fopen(".sht/status-tracked.sht", "r");
             if (status_tracked_file == NULL)
             {
@@ -758,13 +971,14 @@ STATUS_FILE_IS_UNTRACKED:
                return -1;
             }
             for (char c; ( c = fgetc(status_tracked_file) ) != EOF; putchar(c));
+            printf("%s", SHT_RESET);
             fclose(status_tracked_file);
          }
          if (tracked_count < reg_count)
          {
             if (dir_count + tracked_count)
                printf("\n");
-            printf("Untracked Files:\n");
+            printf("Untracked Files:%s\n", SHT_ORANGE);
             status_untracked_file = fopen(".sht/status-untracked.sht", "r");
             if (status_untracked_file == NULL)
             {
@@ -772,6 +986,7 @@ STATUS_FILE_IS_UNTRACKED:
                return -1;
             }
             for (char c; ( c = fgetc(status_untracked_file) ) != EOF; putchar(c));
+            puts(SHT_RESET);
             fclose(status_untracked_file);
          }
       }
@@ -786,7 +1001,7 @@ STATUS_FREE_BUFFERS:
       if (argc < 3)
       {
          printf("Nothing specified for \"%s store\"\n", argv[0]);
-         printf("  try running \"%s store [FILE] ...\" to track files\n", argv[0]);
+         printf("%*stry running \"%s store [FILE] ...\" to track files\n", SHT_IND_LEVEL, "", argv[0]);
       }
 
       FILE* rv = sht_determine_objects(0, 0, 0);
@@ -797,7 +1012,7 @@ STATUS_FREE_BUFFERS:
       fclose(rv);
 
       sht_pardir_buff pardir;
-      sht_ref_buff    ref;
+      sht_tag_buff    tag;
       sht_hash_buff   hash;
 
       FILE* status_file = fopen(".sht/status.sht", "r");
@@ -825,7 +1040,7 @@ STATUS_FREE_BUFFERS:
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
          {
             printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
-            printf("  (NOTE: \"%s %s\" does not support flags)\n", argv[0], argv[1]);
+            printf("%*s(NOTE: \"%s %s\" does not support flags)\n", SHT_IND_LEVEL, "", argv[0], argv[1]);
             args_need_match[i] = NULL;
             continue;
          }
@@ -839,13 +1054,13 @@ STATUS_FREE_BUFFERS:
          return -1;
       }
 
-      for (; fscanf(status_file, "%64s %127s", hash, ref) != EOF; )
+      for (; fscanf(status_file, "%64s %127s", hash, tag) != EOF; )
       {
          for (int i = 0; i < store_argc; i++)
          {
             if (args_need_match[i] == NULL)
                continue;
-            if (strcmp(ref, args_need_match[i]) == 0)
+            if (strcmp(tag, args_need_match[i]) == 0)
             {
                int wb;
                wb = snprintf(pardir, 512, ".sht/objects/%.2s/", hash);
@@ -878,7 +1093,7 @@ STATUS_FREE_BUFFERS:
                   perror("Error: failed to open object file for write");
                   return -1;
                }
-               FILE* file_actual = fopen(ref, "r");
+               FILE* file_actual = fopen(tag, "r");
                if (file_actual == NULL)
                {
                   perror("Error: failed to open actual file for read");
@@ -891,20 +1106,20 @@ STATUS_FREE_BUFFERS:
                fclose(file_object);
                fclose(file_actual);
 
-               wb = snprintf(pardir, 512, ".sht/refs/%s", ref);
+               wb = snprintf(pardir, 512, ".sht/tags/filename:%s", tag);
                if (wb >= 512)
                {
                   fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
                   return -1;
                }
 
-               FILE* file_ref = fopen(pardir, "w");
-               if (file_ref == NULL)
+               FILE* file_tag = fopen(pardir, "w");
+               if (file_tag == NULL)
                {
-                  perror("Error: failed to open ref file for read");
+                  perror("Error: failed to open tag file for read");
                   return -1;
                }
-               fprintf(file_ref, "%s\n", hash);
+               fprintf(file_tag, "%s\n", hash);
 
                fprintf(stored_file, "%s\n", args_need_match[i]);
                args_need_match[i] = NULL;
@@ -935,23 +1150,23 @@ STATUS_FREE_BUFFERS:
       }
 
       char* hash;
-      char* ref;
-      switch (sht_check(argv, &ref, &hash))
+      char* tag;
+      switch (sht_check(argv, &tag, &hash))
       {
          case -1:
             return -1;
             break;
          case 0:
-            printf("file \"%s\" contents are untracked and the name \"%s\" is unused\n", argv[2], ref);
+            printf("file \"%s\" contents are untracked and the name \"%s\" is unused\n", argv[2], tag);//todotag
             break;
          case 1:
-            printf("file \"%s\" contents are already tracked under different name \"%s\"\n", argv[2], ref);
+            printf("file \"%s\" contents are already tracked under different name \"%s\"\n", argv[2], tag);
             break;
          case 2:
-            printf("file \"%s\" contents are untracked but the name \"%s\" is already in use for object %.7s\n", argv[2], ref, hash);
+            printf("file \"%s\" contents are untracked but the name \"%s\" is already in use for object %.7s\n", argv[2], tag, hash);
             break;
          case 3:
-            printf("file \"%s\" contents are already tracked under same name \"%s\"\n", argv[2], ref);
+            printf("file \"%s\" contents are already tracked under same name \"%s\"\n", argv[2], tag);
             break;
       }
 
@@ -975,7 +1190,8 @@ STATUS_FREE_BUFFERS:
       if (argc < 3)
       {
          printf("Nothing specified for \"%s wipe\"\n", argv[0]);
-         printf("  try running \"%s wipe [FILE] ...\" to erase files\n", argv[0]);
+         printf("%*stry running \"%s wipe [FILE] ...\" to erase files\n", SHT_IND_LEVEL, "", argv[0]);
+         return 0;
       }
 
       FILE* rv = sht_determine_objects(0, 0, 0);
@@ -1004,7 +1220,7 @@ STATUS_FREE_BUFFERS:
          if (strncmp(argv[i + 2], "--", 2) == 0 || strncmp(argv[i], "-", 2) == 0)
          {
             printf("Warning: skipping argument \"%s\"\n", argv[i + 2]);
-            printf("  (NOTE: \"%s %s\" does not support flags)\n", argv[0], argv[1]);
+            printf("%*s(NOTE: \"%s %s\" does not support flags)\n", SHT_IND_LEVEL, "", argv[0], argv[1]);
             args_need_match[i] = NULL;
             continue;
          }
@@ -1012,7 +1228,7 @@ STATUS_FREE_BUFFERS:
       }
 
       sht_pardir_buff pardir;
-      sht_ref_buff    ref;
+      sht_tag_buff    tag;
       sht_hash_buff   hash;
 
       for (int i = 0; i < wipe_argc; i++)
@@ -1020,11 +1236,11 @@ STATUS_FREE_BUFFERS:
          if (args_need_match[i] == NULL)
             continue;
 
-         strcpy(ref, args_need_match[i]);
+         strcpy(tag, args_need_match[i]);
 
-         if (sht_get_ref(ref, &hash))
+         if (sht_get_tag(tag, &hash))
          {
-            fprintf(stderr, "Error: ref file \"%s\" not found\n", ref);
+            fprintf(stderr, "Error: tag file \"%s\" not found\n", tag);
             goto SHT_WIPE_RET_ERR;
          }
          args_need_match[i] = NULL;
@@ -1033,9 +1249,9 @@ STATUS_FREE_BUFFERS:
          if (gh)
          {
             if (gh == 1)
-               fprintf(stderr, "Error: file \"%s\" ref found but object parent dir %.2s/ unaccessable\n", ref, hash);
+               fprintf(stderr, "Error: file \"%s\" tag found but object parent dir %.2s/ unaccessable\n", tag, hash);
             else if (gh == 2)
-               fprintf(stderr, "Error: file \"%s\" ref found but object file does not exist\n", ref);
+               fprintf(stderr, "Error: file \"%s\" tag found but object file does not exist\n", tag);
 
             goto SHT_WIPE_RET_ERR;
          }
@@ -1075,7 +1291,7 @@ STATUS_FREE_BUFFERS:
             }
          }
 
-         int wb = snprintf(pardir, 512, ".sht/refs/%.128s", ref);
+         int wb = snprintf(pardir, 512, ".sht/tags/%.128s", tag);
          if (wb >= 512)
          {
             fprintf(stderr, "Error: snprintf write exceeds buffer bounds\n");
@@ -1083,13 +1299,13 @@ STATUS_FREE_BUFFERS:
          }
          if (access(pardir, F_OK))
          {
-            fprintf(stderr, "Error: file \"%s\" ref found but tag not found inside refs\n", ref);
+            fprintf(stderr, "Error: file \"%s\" tag found but tag not found inside tags\n", tag);//todotags
             goto SHT_WIPE_RET_ERR;
          }
 
          if (remove(pardir))
          {
-            fprintf(stderr, "Error: failed to remove ref file \"%s\" targeted for wipe: ", pardir);
+            fprintf(stderr, "Error: failed to remove tag file \"%s\" targeted for wipe: ", pardir);
             perror("");
             goto SHT_WIPE_RET_ERR;
          }
@@ -1136,6 +1352,24 @@ SHT_WIPE_RET_ERR:
       if (sht_normalize_files(force_flag))
          fprintf(stderr, "Error: Failed to normalize files\n");
    }
+   else if (strcmp(argv[1], "tag") == 0)
+   {
+      if (argc < 3)
+      {
+         printf("Nothing specified for \"%s%s tag%s\"\n", SHT_YELLOW_RECCOMEND, argv[0], SHT_RESET);
+         printf("%*sTry running \"%s%s tag [tag-name | keyword:tag-name] ...%s\" to tag files\n",
+            SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, argv[0],           SHT_RESET);
+         return 0;
+      }
+
+      const char* filename_tag;
+      for (int arg_i = 2; arg_i < argc; arg_i++)
+      {
+         sht_parse_tag(argv[arg_i], &filename_tag);
+      }
+      if (filename_tag)
+         printf("Filename specified as \"%s\"\n", filename_tag);
+   }
    else if (strcmp(argv[1], "hash") == 0)
    {
       if (argc < 3)
@@ -1152,8 +1386,8 @@ SHT_WIPE_RET_ERR:
    else
    {
       printf("%s: unrecognized command \"%s\"\n", argv[0], argv[1]);
-      printf("   Try running \"%s\" -h for help\n", argv[0]);
-      printf("   JK it doesn't exist yet\n");
+      printf("%*s Try running \"%s%s -h%s\" for help\n",
+            SHT_IND_LEVEL, "", SHT_YELLOW_RECCOMEND, argv[0],           SHT_RESET);
 
       return 0;
    }
