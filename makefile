@@ -101,12 +101,28 @@ autocomp:
 	fi
 	@echo "You may now \"source ~/.bashrc\" to make autocompletions accessible"
 
+# Build manpages
+PANDOC ?= pandoc
+MANPAGE.md = $(PANDOC) --standalone $(PANDOCFLAGS) --to man
+
+man/%.1: man/%.1.md
+	$(MANPAGE.md) $< -o $@
+
+man/%.3: man/%.3.md
+	$(MANPAGE.md) $< -o $@
+
+manpages: man/sht.1 man/sht_parse_error.3
+
+.PHONY: manpages
+
 # Full install with dependencies and autocompletion
 install: build autocomp
 	@echo "Installation complete"
 
 clean: clean-blake3
 	rm -rvf sht
+	rm -f man/*.1
+	rm -f man/*.3
 	@echo "Cleaned build artifacts"
 
 clean-blake3:
