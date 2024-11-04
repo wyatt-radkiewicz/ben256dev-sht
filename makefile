@@ -101,12 +101,36 @@ autocomp:
 	fi
 	@echo "You may have to \"source ~/.bashrc\" to make autocompletions accessible"
 
+# Build manpages
+PANDOC ?= pandoc
+MANPAGE.md = $(PANDOC) --standalone $(PANDOCFLAGS) --to man
+
+man/%.1: man/%.1.md
+	$(MANPAGE.md) $< -o $@
+
+man/%.3: man/%.3.md
+	$(MANPAGE.md) $< -o $@
+
+manpages: man/sht.1 man/sht_parse_error.3
+	@if [ -d "/usr/share/man/man1/" ]; then \
+		sudo cp man/*.1 /usr/share/man/man1/; \
+	fi
+	@if [ -d "/usr/share/man/man3/" ]; then \
+		sudo cp man/*.3 /usr/share/man/man3/; \
+	fi
+	@echo "sht man pages installed successfully"
+	@mandb
+
+.PHONY: manpages
+
 # Full install with dependencies and autocompletion
-install: build autocomp
+install: build autocomp manpages
 	@echo "Installation complete"
 
 clean: clean-blake3
 	rm -rvf sht
+	rm -f man/*.1
+	rm -f man/*.3
 	@echo "Cleaned build artifacts"
 
 clean-blake3:
