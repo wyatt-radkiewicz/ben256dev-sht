@@ -112,11 +112,19 @@ man/%.3: man/%.3.md
 	$(MANPAGE.md) $< -o $@
 
 manpages: man/sht.1 man/sht_parse_error.3
+	@if [ -d "/usr/share/man/man1/" ]; then \
+		sudo cp man/*.1 /usr/share/man/man1/; \
+	fi
+	@if [ -d "/usr/share/man/man3/" ]; then \
+		sudo cp man/*.3 /usr/share/man/man3/; \
+	fi
+	@echo "sht man pages installed successfully"
+	@mandb
 
 .PHONY: manpages
 
 # Full install with dependencies and autocompletion
-install: build autocomp
+install: build autocomp manpages
 	@echo "Installation complete"
 
 clean: clean-blake3
