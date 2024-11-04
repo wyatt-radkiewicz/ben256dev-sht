@@ -1,75 +1,98 @@
-% HELLO(1) Version 1.0 | Frivolous "Hello World" Documentation
+% SHT(1) Version 1.0 | Sht Manual
 
 NAME
 ====
 
-**hello** — prints Hello, World!
+**sht** — shell tag utility for resources
 
 SYNOPSIS
 ========
-
-| **hello** \[**-o**|**--out** _file_] \[_dedication_]
-| **hello** \[**-h**|**--help**|**-v**|**--version**]
+| ***sht*** \[**-h** | **--help** | **-v** | **--version**] <**command**> \[<**args**>]
 
 DESCRIPTION
 ===========
 
-Prints "Hello, _dedication_!" to the terminal. If no dedication is
-given, uses the default dedication. The default dedication is chosen by
-the following sequence:
-
- 1. Using the environment variable *DEFAULT_HELLO_DEDICATION*
- 2. Using the per-user configuration file, *~/.hellorc*
- 3. Using the system-wide configuration file, */etc/hello.conf*
- 4. Finally, using "world".
+A ripoff of git version control with a faster blake3 hashing function, tagging functionality for files, support for large resources and nesting of tracked repositories.
 
 Options
 -------
 
 -h, --help
 
-:   Prints brief usage information.
-
--o, --output
-
-:   Outputs the greeting to the given filename.
-
-    The file must be an **open(2)**able and **write(2)**able file.
+:   Prints synopsis and all available commands.
 
 -v, --version
 
-:   Prints the current version number.
+:   Prints the current octal version number.
 
-FILES
-=====
+COMMANDS
+========
 
-*~/.hellorc*
+Porcelain
+---------
 
-:   Per-user default dedication file.
+init
 
-*/etc/hello.conf*
+:   Initialize sht repository by creating .sht directory and internals.
 
-:   Global default dedication file.
+status
 
-ENVIRONMENT
-===========
+:   Show which files are tracked.
 
-**DEFAULT_HELLO_DEDICATION**
+store
 
-:   The default dedication if none is given. Has the highest precedence
-    if a dedication is not supplied on the command line.
+:   Track a file by adding a corresponding filename tag and object copy.
+
+wipe
+
+:   Untrack a file by removing corresponding filename tag and object copy.
+
+tag
+
+:   Map given tags onto specified objects with 'filename:foo' tag.
+
+tree
+
+:   Verify sht repository structure.
+
+check
+
+:   Show tracking status for specific file.
+
+unsuck
+
+:   Check every provided filename for non-compliant characters and prompt for automatic rename.
+
+Plumbing
+--------
+
+tree
+
+: Verify sht repository structure.
+
+check
+
+: Show tracking status for specific file.
+
+unsuck
+
+: Check every provided filename for non-compliant characters and prompt for automatic rename.
+
+hash
+
+: Take filename as input and output blake3 hash and filename.
 
 BUGS
 ====
 
-See GitHub Issues: <https://github.com/[owner]/[repo]/issues>
+See GitHub Issues or report your own: <https://github.com/ben256dev/sht/issues>
 
 AUTHOR
 ======
 
-Foobar Goodprogrammer <foo@example.org>
+Benjamin Blodgett <benjamin@ben256.com>
 
 SEE ALSO
 ========
 
-**hi(1)**, **hello(3)**, **hello.conf(4)**
+**sht_parse_error(1)**

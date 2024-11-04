@@ -8,7 +8,7 @@ typedef char sht_hash_buff     [65];
 
 void sht_print_usage(const char* commname)
 {
-   printf("usage: %s [-h | --help] [-v | --version] <command>\n", commname);
+   printf("usage: %s [-h | --help | -v | --version] <command> [<args>]\n", commname);
    printf("\n");
    printf("commonly used commands:\n");
    printf("%*sinit     initialize sht repository by creating .sht directory and internals\n", SHT_IND_LEVEL, "");
